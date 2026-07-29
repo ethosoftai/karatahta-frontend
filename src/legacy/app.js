@@ -38,7 +38,9 @@ const state = {
     failed: false,
     browserFailed: false,
     jobId: null,
-    streamUrl: null
+    streamUrl: null,
+    introDurationSeconds: 8,
+    handoffSeconds: 0
   },
   karaChat: []
 };
@@ -158,14 +160,18 @@ const liveBoardPlayer = new LiveBoardPlayer({
 
 function failLiveManimPlayback(error) {
   if (!state.liveManim.active && state.liveManim.browserFailed) return;
+  const introDuration = Number(state.liveManim.introDurationSeconds || 8);
+  state.liveManim.handoffSeconds = Math.max(
+    0,
+    Number(els.liveManimVideo.currentTime || 0) - introDuration
+  );
   state.liveManim.active = false;
   state.liveManim.enabled = false;
   state.liveManim.failed = true;
   state.liveManim.browserFailed = true;
-  els.liveManimVideo.classList.remove('visible');
   setVideoLoading(false);
   setVideoOverlay(
-    `Canlı yayın kesildi; hazır video kuyruğuna geçiliyor.${error?.message ? ` ${error.message}` : ''}`
+    `Son kare korunuyor; hazır video aynı noktadan devam edecek.${error?.message ? ` ${error.message}` : ''}`
   );
   maybeStartOrContinuePlayback();
 }
@@ -1129,7 +1135,9 @@ function resetLiveManimStream() {
     failed: false,
     browserFailed: false,
     jobId: null,
-    streamUrl: null
+    streamUrl: null,
+    introDurationSeconds: 8,
+    handoffSeconds: 0
   };
   els.liveManimVideo.classList.remove('visible');
 }
@@ -1210,9 +1218,6 @@ function playSegmentAt(index, startTime = 0, shouldPlay = true) {
 
   const targetUrl = absoluteVideoUrl(segment.videoUrl);
   const sourceChanged = els.videoOutput.getAttribute('src') !== targetUrl;
-  if (state.liveManim.active) {
-    resetLiveManimStream();
-  }
   if (liveBoardPlayer.isActive) {
     liveBoardPlayer.stop();
   }
@@ -1220,9 +1225,7 @@ function playSegmentAt(index, startTime = 0, shouldPlay = true) {
   state.playback.waitingForNext = false;
   state.playback.currentIndex = index;
   stopPreparingProgress({ complete: true });
-  els.videoOutput.classList.add('visible');
   showPlayerControlsTemporarily();
-  setVideoOverlay('', false);
   const applyStartTime = () => {
     if (Number.isFinite(startTime) && startTime > 0) {
       els.videoOutput.currentTime = Math.min(startTime, els.videoOutput.duration || startTime);
@@ -1234,14 +1237,22 @@ function playSegmentAt(index, startTime = 0, shouldPlay = true) {
       });
     }
   };
+  const activateTarget = () => {
+    if (els.liveManimVideo.classList.contains('visible')) {
+      resetLiveManimStream();
+    }
+    els.videoOutput.classList.add('visible');
+    setVideoOverlay('', false);
+    applyStartTime();
+  };
 
   if (sourceChanged) {
-    setVideoLoading(true, 'Yeni bölüm yükleniyor...');
-    els.videoOutput.addEventListener('loadedmetadata', applyStartTime, { once: true });
+    setVideoLoading(true, 'Hazır bölüm arka planda yükleniyor...');
+    els.videoOutput.addEventListener('canplay', activateTarget, { once: true });
     els.videoOutput.src = targetUrl;
     els.videoOutput.load();
   } else {
-    applyStartTime();
+    activateTarget();
   }
   preloadNextSegment();
   updatePlayerControls();
@@ -1259,10 +1270,38 @@ function preloadNextSegment() {
 }
 
 function maybeStartOrContinuePlayback() {
-  if (state.liveManim.active || (state.liveManim.enabled && !state.liveManim.failed)) {
+  if (
+    state.liveManim.active
+    || (
+      state.liveManim.enabled
+      && !state.liveManim.failed
+      && !state.liveManim.browserFailed
+    )
+  ) {
     return;
   }
   if (!state.playback.active && state.playback.playable.length) {
+    const handoffSeconds = Math.max(0, Number(state.liveManim.handoffSeconds || 0));
+    if (handoffSeconds > 0) {
+      let cursor = 0;
+      for (let index = 0; index < state.playback.playable.length; index += 1) {
+        const duration = segmentDuration(state.playback.playable[index], index);
+        if (
+          handoffSeconds <= cursor + duration
+          || index === state.playback.playable.length - 1
+        ) {
+          playSegmentAt(
+            index,
+            Math.min(
+              Math.max(0, handoffSeconds - cursor),
+              Math.max(0, duration - 0.25)
+            )
+          );
+          return;
+        }
+        cursor += duration;
+      }
+    }
     const liveSnapshot = liveBoardPlayer.snapshot();
     const firstSegment = state.playback.playable[0];
     const matchingLiveSegment = liveSnapshot.active && liveSnapshot.segmentId === firstSegment.id;
@@ -1592,6 +1631,7 @@ function updateLiveManimFromJob(job) {
   const sourceChanged = state.liveManim.streamUrl !== absoluteStreamUrl;
   state.liveManim.jobId = job.id;
   state.liveManim.streamUrl = absoluteStreamUrl;
+  state.liveManim.introDurationSeconds = Number(job.liveManim?.introDurationSeconds || 8);
   state.liveManim.active = true;
   liveBoardPlayer.stop();
   els.videoOutput.pause();
