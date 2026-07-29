@@ -395,7 +395,10 @@ function localVideoUrl(relativePath) {
   return relativePath ? apiUrl(`/renders/${relativePath}`) : null;
 }
 
-async function lessonVideoUrl(lessonId, video) {
+async function lessonVideoUrl(lessonId, video, signedVideoUrl = null) {
+  if (signedVideoUrl) {
+    return signedVideoUrl;
+  }
   if (video?.video_storage_path) {
     try {
       const data = await apiGet(`/api/lessons/${encodeURIComponent(lessonId)}/video-url`);
@@ -447,7 +450,7 @@ async function loadLessonFromHistory(lessonId) {
   renderKaraChat();
   showStudio();
 
-  const videoUrl = await lessonVideoUrl(data.lesson.id, data.video);
+  const videoUrl = await lessonVideoUrl(data.lesson.id, data.video, data.videoUrl);
   if (videoUrl) {
     els.videoOutput.classList.add('visible');
     setVideoLoading(true, 'Ders videosu yükleniyor...');
@@ -790,13 +793,39 @@ function captureVideoFrame() {
   }
 
   const canvas = document.createElement('canvas');
-  canvas.width = els.videoOutput.videoWidth || 1280;
-  canvas.height = els.videoOutput.videoHeight || 720;
+  const sourceWidth = els.videoOutput.videoWidth || 1280;
+  const sourceHeight = els.videoOutput.videoHeight || 720;
+  const scale = Math.min(1, 640 / sourceWidth, 360 / sourceHeight);
+  canvas.width = Math.max(1, Math.round(sourceWidth * scale));
+  canvas.height = Math.max(1, Math.round(sourceHeight * scale));
   const context = canvas.getContext('2d');
+  if (!context) {
+    throw new Error('Video karesi hazirlanamadi.');
+  }
+  context.imageSmoothingEnabled = true;
+  context.imageSmoothingQuality = 'high';
   context.drawImage(els.videoOutput, 0, 0, canvas.width, canvas.height);
   return {
     mimeType: 'image/jpeg',
-    data: canvas.toDataURL('image/jpeg', 0.82)
+    data: canvas.toDataURL('image/jpeg', 0.68)
+  };
+}
+
+function compactLessonPlanForKara(plan) {
+  if (!plan || typeof plan !== 'object') {
+    return null;
+  }
+  return {
+    topic: String(plan.topic || '').slice(0, 240),
+    core_insight: String(plan.core_insight || '').slice(0, 600),
+    segments: Array.isArray(plan.segments)
+      ? plan.segments.slice(0, 10).map((segment) => ({
+          id: segment?.id || null,
+          title: String(segment?.title || '').slice(0, 160),
+          learning_objective: String(segment?.learning_objective || '').slice(0, 240),
+          narration: String(segment?.narration || '').slice(0, 320)
+        }))
+      : []
   };
 }
 
@@ -822,10 +851,11 @@ async function submitKaraQuestion(event) {
 
   const chatHistory = state.karaChat
     .filter((message) => !message.pending)
+    .slice(-6)
     .map((message) => ({
       role: message.role,
       timestamp: message.timestamp,
-      content: message.content
+      content: String(message.content || '').slice(0, 1200)
     }));
 
   els.karaQuestionInput.value = '';
@@ -847,7 +877,7 @@ async function submitKaraQuestion(event) {
       timestamp_label: timestampLabel,
       lesson_title: els.lessonTitle.textContent,
       lesson_id: state.lessonId,
-      lesson_plan: state.plan,
+      lesson_plan: compactLessonPlanForKara(state.plan),
       chat_history: chatHistory
     });
     pendingAnswer.content = data.answer || 'Bu soruya cevap uretilemedi.';
