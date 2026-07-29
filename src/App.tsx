@@ -15,11 +15,12 @@ function loadMathJax() {
 
 export function App() {
   useEffect(() => {
-    loadMathJax();
+    const mathJaxTimer = window.setTimeout(loadMathJax, 2500);
     if (!window.__KARA_LEGACY_LOADED__) {
       window.__KARA_LEGACY_LOADED__ = true;
       void import('./legacy/app.js');
     }
+    return () => window.clearTimeout(mathJaxTimer);
   }, []);
 
   return (
