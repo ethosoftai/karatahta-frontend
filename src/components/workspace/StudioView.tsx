@@ -15,6 +15,11 @@ export function StudioView() {
 
       <section className="watchPanel">
         <div className="videoShell">
+          <div id="liveStreamBadge" className="liveStreamBadge hidden" aria-live="polite">
+            <span aria-hidden="true" />
+            <strong>CANLI ÜRETİM</strong>
+            <span id="liveStreamText">İlk bölüm hazırlanıyor</span>
+          </div>
           <div id="preparingPanel" className="preparingPanel hidden">
             <div className="preparingContent">
               <h3 id="preparingTitle">Ders hazırlanıyor</h3>

@@ -104,6 +104,8 @@ const els = {
   codeOutput: document.querySelector('#codeOutput'),
   videoOutput: document.querySelector('#videoOutput'),
   preloadVideo: document.querySelector('#preloadVideo'),
+  liveStreamBadge: document.querySelector('#liveStreamBadge'),
+  liveStreamText: document.querySelector('#liveStreamText'),
   preparingPanel: document.querySelector('#preparingPanel'),
   preparingTitle: document.querySelector('#preparingTitle'),
   preparingMessage: document.querySelector('#preparingMessage'),
@@ -681,12 +683,14 @@ async function startFullLessonGeneration() {
   setDownloadVideo(null);
   resetProgressivePlayback();
   startPreparingProgress(els.lessonTitle.textContent);
+  els.liveStreamBadge.classList.remove('hidden');
+  els.liveStreamText.textContent = `0/${segments.length} bölüm hazır`;
   setVideoOverlay('Ilk bolum hazirlaniyor...');
 
   try {
     setStatus('Tam ders uretiliyor...');
     const job = await api('/api/full-video', { plan: state.plan, lesson_id: state.lessonId });
-    const finalJob = await pollFullVideoJob(job.id);
+    const finalJob = await waitForFullVideoJob(job.id);
     els.renderMeta.textContent = 'Tam Ders';
     els.logOutput.textContent += `\nTam video: ${finalJob.result.videoUrl}`;
     state.playback.finalVideoUrl = finalJob.result.videoUrl;
@@ -1071,6 +1075,8 @@ function resetProgressivePlayback() {
   els.videoOutput.classList.remove('visible');
   els.preloadVideo.removeAttribute('src');
   els.preloadVideo.load();
+  els.liveStreamBadge.classList.add('hidden');
+  els.liveStreamText.textContent = 'İlk bölüm hazırlanıyor';
   stopPreparingProgress();
   clearTimeout(controlsHideTimer);
   els.playerControls.classList.add('hidden');
@@ -1377,23 +1383,7 @@ async function pollFullVideoJob(jobId) {
       throw new Error(job.error || 'Job durumu okunamadi.');
     }
 
-    const segmentLines = (job.segments || [])
-      .map((segment) => `${segment.id}: ${segment.status}${segment.videoUrl ? ` -> ${segment.videoUrl}` : ''}`)
-      .join('\n');
-
-    updatePlayableSegments(job);
-    maybeStartOrContinuePlayback();
-
-    els.logOutput.textContent = [
-      `Job: ${job.id}`,
-      `Durum: ${job.status}`,
-      `Ilerleme: ${job.progress}/${job.total}`,
-      `Mesaj: ${job.message || ''}`,
-      `Anlik: ${job.current || ''}`,
-      '',
-      segmentLines
-    ].join('\n');
-    setStatus(`${job.progress}/${job.total} segment | ${job.current || job.status}`);
+    applyFullVideoJobUpdate(job);
 
     if (job.status === 'done') {
       setDownloadVideo(job.result?.videoUrl);
@@ -1405,6 +1395,89 @@ async function pollFullVideoJob(jobId) {
     }
 
     await new Promise((resolve) => setTimeout(resolve, 2000));
+  }
+}
+
+function applyFullVideoJobUpdate(job) {
+  const segmentLines = (job.segments || [])
+    .map((segment) => `${segment.id}: ${segment.status}${segment.videoUrl ? ` -> ${segment.videoUrl}` : ''}`)
+    .join('\n');
+
+  updatePlayableSegments(job);
+  maybeStartOrContinuePlayback();
+  els.liveStreamBadge.classList.toggle('hidden', job.status === 'done' || job.status === 'failed');
+  els.liveStreamText.textContent = `${job.progress}/${job.total} bölüm hazır${job.current ? ` · ${job.current}` : ''}`;
+  els.logOutput.textContent = [
+    `Job: ${job.id}`,
+    `Durum: ${job.status}`,
+    `Ilerleme: ${job.progress}/${job.total}`,
+    `Mesaj: ${job.message || ''}`,
+    `Anlik: ${job.current || ''}`,
+    '',
+    segmentLines
+  ].join('\n');
+  setStatus(`${job.progress}/${job.total} segment | ${job.current || job.status}`);
+}
+
+async function streamFullVideoJob(jobId) {
+  const response = await fetch(apiUrl(`/api/jobs/${jobId}/events`), {
+    headers: {
+      Accept: 'text/event-stream',
+      ...authHeaders()
+    }
+  });
+  if (!response.ok || !response.body) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.error || 'Canlı üretim bağlantısı kurulamadı.');
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  while (true) {
+    const { value, done } = await reader.read();
+    buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
+    let boundary = buffer.indexOf('\n\n');
+
+    while (boundary !== -1) {
+      const block = buffer.slice(0, boundary);
+      buffer = buffer.slice(boundary + 2);
+      const dataText = block
+        .split('\n')
+        .filter((line) => line.startsWith('data:'))
+        .map((line) => line.slice(5).trimStart())
+        .join('\n');
+      if (dataText) {
+        const job = JSON.parse(dataText);
+        applyFullVideoJobUpdate(job);
+        if (job.status === 'done') {
+          await reader.cancel().catch(() => {});
+          setDownloadVideo(job.result?.videoUrl);
+          return job;
+        }
+        if (job.status === 'failed') {
+          const error = new Error(job.error || 'Tam ders üretimi başarısız oldu.');
+          error.jobFailed = true;
+          throw error;
+        }
+      }
+      boundary = buffer.indexOf('\n\n');
+    }
+
+    if (done) {
+      throw new Error('Canlı üretim bağlantısı tamamlanmadan kapandı.');
+    }
+  }
+}
+
+async function waitForFullVideoJob(jobId) {
+  try {
+    return await streamFullVideoJob(jobId);
+  } catch (error) {
+    if (error.jobFailed) throw error;
+    els.logOutput.textContent += `\nCanlı bağlantı kesildi; durum sorgulamasına geçildi: ${error.message}`;
+    return pollFullVideoJob(jobId);
   }
 }
 
