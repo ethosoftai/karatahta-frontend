@@ -1,4 +1,5 @@
 import { LiveBoardPlayer } from './liveBoardPlayer.js';
+import { FragmentedMp4Player } from './fragmentedMp4Player.js';
 
 // Existing production workflow, loaded after the React shell mounts.
 const API_BASE_URL = String(window.KARA_API_BASE_URL || '').replace(/\/$/, '');
@@ -153,6 +154,38 @@ const liveBoardPlayer = new LiveBoardPlayer({
   onEnded: () => {
     setVideoOverlay('İlk kaliteli video bölümü hazırlanıyor...');
   }
+});
+
+function failLiveManimPlayback(error) {
+  if (!state.liveManim.active && state.liveManim.browserFailed) return;
+  state.liveManim.active = false;
+  state.liveManim.enabled = false;
+  state.liveManim.failed = true;
+  state.liveManim.browserFailed = true;
+  els.liveManimVideo.classList.remove('visible');
+  setVideoLoading(false);
+  setVideoOverlay(
+    `Canlı yayın kesildi; hazır video kuyruğuna geçiliyor.${error?.message ? ` ${error.message}` : ''}`
+  );
+  maybeStartOrContinuePlayback();
+}
+
+const fragmentedMp4Player = new FragmentedMp4Player(els.liveManimVideo, {
+  onConnected: () => {
+    setVideoLoading(true, 'İlk 5 saniyelik 720p60 parça hazırlanıyor...');
+  },
+  onFirstFragment: () => {
+    stopPreparingProgress({ complete: true });
+    els.liveManimVideo.classList.add('visible');
+    setVideoLoading(false);
+    setVideoOverlay('', false);
+  },
+  onFragment: () => {
+    const buffered = els.liveManimVideo.buffered;
+    const bufferedUntil = buffered.length ? buffered.end(buffered.length - 1) : 0;
+    els.liveStreamText.textContent = `720P60 · ${Math.max(5, Math.floor(bufferedUntil))} saniye bufferlandı`;
+  },
+  onError: failLiveManimPlayback
 });
 
 function setStatus(message, isError = false) {
@@ -1089,6 +1122,7 @@ function setDownloadVideo(videoUrl) {
 }
 
 function resetLiveManimStream() {
+  fragmentedMp4Player.stop();
   state.liveManim = {
     active: false,
     enabled: false,
@@ -1097,9 +1131,6 @@ function resetLiveManimStream() {
     jobId: null,
     streamUrl: null
   };
-  els.liveManimVideo.pause();
-  els.liveManimVideo.removeAttribute('src');
-  els.liveManimVideo.load();
   els.liveManimVideo.classList.remove('visible');
 }
 
@@ -1563,21 +1594,13 @@ function updateLiveManimFromJob(job) {
   state.liveManim.streamUrl = absoluteStreamUrl;
   state.liveManim.active = true;
   liveBoardPlayer.stop();
-  stopPreparingProgress({ complete: true });
   els.videoOutput.pause();
   els.videoOutput.classList.remove('visible');
-  els.liveManimVideo.classList.add('visible');
   setVideoOverlay('', false);
 
   if (sourceChanged) {
-    setVideoLoading(true, 'İlk Manim karesi hazırlanıyor...');
-    els.liveManimVideo.src = absoluteStreamUrl;
-    els.liveManimVideo.load();
-  }
-  if (els.liveManimVideo.paused) {
-    els.liveManimVideo.play().catch(() => {
-      setVideoOverlay('Canlı Manim dersini başlatmak için videoya dokun.');
-    });
+    setVideoLoading(true, 'Kesintisiz 720p60 akışa bağlanılıyor...');
+    fragmentedMp4Player.start(absoluteStreamUrl).catch(failLiveManimPlayback);
   }
 }
 
@@ -1787,21 +1810,16 @@ els.liveManimVideo.addEventListener('playing', () => {
   updateKaraAskVisibility();
 });
 els.liveManimVideo.addEventListener('ended', () => {
-  state.liveManim.active = false;
+  // Keep the completed MediaSource video as the active player so the frame
+  // never disappears and the user can replay it without switching elements.
+  state.liveManim.active = true;
   els.liveStreamBadge.classList.add('hidden');
-  setVideoOverlay('Canlı ders tamamlandı. Kaliteli final video arka planda hazırlandı.', false);
+  setVideoOverlay('Canlı ders tamamlandı. Tekrar oynatmak için videoya dokun.', false);
   updateKaraAskVisibility();
 });
 els.liveManimVideo.addEventListener('error', () => {
   if (!els.liveManimVideo.getAttribute('src')) return;
-  state.liveManim.active = false;
-  state.liveManim.enabled = false;
-  state.liveManim.failed = true;
-  state.liveManim.browserFailed = true;
-  els.liveManimVideo.classList.remove('visible');
-  setVideoLoading(false);
-  setVideoOverlay('Canlı Manim bağlantısı kurulamadı; parça videolara geçiliyor.');
-  maybeStartOrContinuePlayback();
+  failLiveManimPlayback(els.liveManimVideo.error);
 });
 els.liveManimVideo.addEventListener('click', () => {
   if (els.liveManimVideo.paused) {
