@@ -31,6 +31,14 @@ const state = {
     waitingForNext: false,
     userPaused: false
   },
+  liveManim: {
+    active: false,
+    enabled: false,
+    failed: false,
+    browserFailed: false,
+    jobId: null,
+    streamUrl: null
+  },
   karaChat: []
 };
 
@@ -114,6 +122,7 @@ const els = {
   preparingBar: document.querySelector('#preparingBar'),
   videoLoadingPanel: document.querySelector('#videoLoadingPanel'),
   videoLoadingText: document.querySelector('#videoLoadingText'),
+  liveManimVideo: document.querySelector('#liveManimVideo'),
   liveBoardCanvas: document.querySelector('#liveBoardCanvas'),
   liveBoardAudio: document.querySelector('#liveBoardAudio'),
   playerControls: document.querySelector('#playerControls'),
@@ -795,8 +804,15 @@ function resetKaraChat() {
   renderKaraChat();
 }
 
+function activeLessonVideo() {
+  if (state.liveManim.active && els.liveManimVideo.classList.contains('visible')) {
+    return els.liveManimVideo;
+  }
+  return els.videoOutput;
+}
+
 function updateKaraAskVisibility() {
-  const visible = els.videoOutput.classList.contains('visible');
+  const visible = activeLessonVideo().classList.contains('visible');
   els.karaAskForm.classList.toggle('hidden', !visible);
   if (!visible) {
     els.karaTimestamp.textContent = '';
@@ -809,6 +825,9 @@ function updateKaraTimestamp() {
 }
 
 function currentQuestionTimestamp() {
+  if (state.liveManim.active) {
+    return els.liveManimVideo.currentTime || 0;
+  }
   if (state.playback.active) {
     return currentGlobalTime();
   }
@@ -816,13 +835,14 @@ function currentQuestionTimestamp() {
 }
 
 function captureVideoFrame() {
-  if (!els.videoOutput.classList.contains('visible') || els.videoOutput.readyState < 2) {
+  const sourceVideo = activeLessonVideo();
+  if (!sourceVideo.classList.contains('visible') || sourceVideo.readyState < 2) {
     throw new Error('Soru sormak icin video karesi hazir degil.');
   }
 
   const canvas = document.createElement('canvas');
-  const sourceWidth = els.videoOutput.videoWidth || 1280;
-  const sourceHeight = els.videoOutput.videoHeight || 720;
+  const sourceWidth = sourceVideo.videoWidth || 1280;
+  const sourceHeight = sourceVideo.videoHeight || 720;
   const scale = Math.min(1, 640 / sourceWidth, 360 / sourceHeight);
   canvas.width = Math.max(1, Math.round(sourceWidth * scale));
   canvas.height = Math.max(1, Math.round(sourceHeight * scale));
@@ -832,7 +852,7 @@ function captureVideoFrame() {
   }
   context.imageSmoothingEnabled = true;
   context.imageSmoothingQuality = 'high';
-  context.drawImage(els.videoOutput, 0, 0, canvas.width, canvas.height);
+  context.drawImage(sourceVideo, 0, 0, canvas.width, canvas.height);
   return {
     mimeType: 'image/jpeg',
     data: canvas.toDataURL('image/jpeg', 0.68)
@@ -1058,6 +1078,21 @@ function setDownloadVideo(videoUrl) {
   els.downloadVideoBtn.classList.remove('hidden');
 }
 
+function resetLiveManimStream() {
+  state.liveManim = {
+    active: false,
+    enabled: false,
+    failed: false,
+    browserFailed: false,
+    jobId: null,
+    streamUrl: null
+  };
+  els.liveManimVideo.pause();
+  els.liveManimVideo.removeAttribute('src');
+  els.liveManimVideo.load();
+  els.liveManimVideo.classList.remove('visible');
+}
+
 function seekToGlobalTime(seconds) {
   if (!state.playback.active && els.videoOutput.classList.contains('visible')) {
     els.videoOutput.currentTime = Math.max(0, Math.min(Number(seconds) || 0, els.videoOutput.duration || 0));
@@ -1091,6 +1126,7 @@ function resetProgressivePlayback() {
   els.videoOutput.removeAttribute('src');
   els.videoOutput.load();
   els.videoOutput.classList.remove('visible');
+  resetLiveManimStream();
   liveBoardPlayer.stop();
   els.preloadVideo.removeAttribute('src');
   els.preloadVideo.load();
@@ -1133,6 +1169,9 @@ function playSegmentAt(index, startTime = 0, shouldPlay = true) {
 
   const targetUrl = absoluteVideoUrl(segment.videoUrl);
   const sourceChanged = els.videoOutput.getAttribute('src') !== targetUrl;
+  if (state.liveManim.active) {
+    resetLiveManimStream();
+  }
   if (liveBoardPlayer.isActive) {
     liveBoardPlayer.stop();
   }
@@ -1179,6 +1218,9 @@ function preloadNextSegment() {
 }
 
 function maybeStartOrContinuePlayback() {
+  if (state.liveManim.active || (state.liveManim.enabled && !state.liveManim.failed)) {
+    return;
+  }
   if (!state.playback.active && state.playback.playable.length) {
     const liveSnapshot = liveBoardPlayer.snapshot();
     const firstSegment = state.playback.playable[0];
@@ -1431,11 +1473,20 @@ function applyFullVideoJobUpdate(job) {
     .map((segment) => `${segment.id}: ${segment.status}${segment.videoUrl ? ` -> ${segment.videoUrl}` : ''}`)
     .join('\n');
 
-  updateLiveBoardFromJob(job);
+  updateLiveManimFromJob(job);
+  if (!state.liveManim.active) {
+    updateLiveBoardFromJob(job);
+  }
   updatePlayableSegments(job);
   maybeStartOrContinuePlayback();
-  els.liveStreamBadge.classList.toggle('hidden', job.status === 'done' || job.status === 'failed');
-  els.liveStreamText.textContent = `${job.progress}/${job.total} bölüm hazır${job.current ? ` · ${job.current}` : ''}`;
+  const liveManimRunning = state.liveManim.active && !els.liveManimVideo.ended;
+  els.liveStreamBadge.classList.toggle(
+    'hidden',
+    job.status === 'failed' || (job.status === 'done' && !liveManimRunning)
+  );
+  els.liveStreamText.textContent = job.liveManimEnabled
+    ? `MANIM · ${job.liveManim?.renderedActions || 0}/${job.liveManim?.generatedActions || 0} aksiyon${job.current ? ` · ${job.current}` : ''}`
+    : `${job.progress}/${job.total} bölüm hazır${job.current ? ` · ${job.current}` : ''}`;
   els.logOutput.textContent = [
     `Job: ${job.id}`,
     `Durum: ${job.status}`,
@@ -1446,6 +1497,43 @@ function applyFullVideoJobUpdate(job) {
     segmentLines
   ].join('\n');
   setStatus(`${job.progress}/${job.total} segment | ${job.current || job.status}`);
+}
+
+function updateLiveManimFromJob(job) {
+  state.liveManim.enabled = Boolean(job.liveManimEnabled);
+  state.liveManim.failed = job.liveManim?.status === 'failed';
+  if (state.liveManim.browserFailed) return;
+  if (!state.liveManim.enabled || state.liveManim.failed) {
+    if (state.liveManim.active) resetLiveManimStream();
+    return;
+  }
+
+  const canPlay = ['streaming', 'finishing', 'done'].includes(job.liveManim?.status);
+  const streamUrl = job.liveManim?.streamUrl;
+  if (!canPlay || !streamUrl) return;
+
+  const absoluteStreamUrl = absoluteVideoUrl(streamUrl);
+  const sourceChanged = state.liveManim.streamUrl !== absoluteStreamUrl;
+  state.liveManim.jobId = job.id;
+  state.liveManim.streamUrl = absoluteStreamUrl;
+  state.liveManim.active = true;
+  liveBoardPlayer.stop();
+  stopPreparingProgress({ complete: true });
+  els.videoOutput.pause();
+  els.videoOutput.classList.remove('visible');
+  els.liveManimVideo.classList.add('visible');
+  setVideoOverlay('', false);
+
+  if (sourceChanged) {
+    setVideoLoading(true, 'İlk Manim karesi hazırlanıyor...');
+    els.liveManimVideo.src = absoluteStreamUrl;
+    els.liveManimVideo.load();
+  }
+  if (els.liveManimVideo.paused) {
+    els.liveManimVideo.play().catch(() => {
+      setVideoOverlay('Canlı Manim dersini başlatmak için videoya dokun.');
+    });
+  }
 }
 
 function updateLiveBoardFromJob(job) {
@@ -1639,6 +1727,43 @@ els.videoOutput.addEventListener('pause', () => {
 
 els.videoOutput.addEventListener('click', () => {
   togglePlayback();
+});
+
+els.liveManimVideo.addEventListener('loadstart', () => {
+  setVideoLoading(true, 'Canlı Manim akışına bağlanılıyor...');
+});
+els.liveManimVideo.addEventListener('waiting', () => {
+  setVideoLoading(true, 'Gemini’nin sıradaki Manim aksiyonu bekleniyor...');
+});
+els.liveManimVideo.addEventListener('canplay', () => setVideoLoading(false));
+els.liveManimVideo.addEventListener('playing', () => {
+  setVideoLoading(false);
+  setVideoOverlay('', false);
+  updateKaraAskVisibility();
+});
+els.liveManimVideo.addEventListener('ended', () => {
+  state.liveManim.active = false;
+  els.liveStreamBadge.classList.add('hidden');
+  setVideoOverlay('Canlı ders tamamlandı. Kaliteli final video arka planda hazırlandı.', false);
+  updateKaraAskVisibility();
+});
+els.liveManimVideo.addEventListener('error', () => {
+  if (!els.liveManimVideo.getAttribute('src')) return;
+  state.liveManim.active = false;
+  state.liveManim.enabled = false;
+  state.liveManim.failed = true;
+  state.liveManim.browserFailed = true;
+  els.liveManimVideo.classList.remove('visible');
+  setVideoLoading(false);
+  setVideoOverlay('Canlı Manim bağlantısı kurulamadı; parça videolara geçiliyor.');
+  maybeStartOrContinuePlayback();
+});
+els.liveManimVideo.addEventListener('click', () => {
+  if (els.liveManimVideo.paused) {
+    els.liveManimVideo.play().catch(() => {});
+  } else {
+    els.liveManimVideo.pause();
+  }
 });
 
 els.liveBoardCanvas.addEventListener('click', () => {
