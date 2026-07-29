@@ -81,6 +81,47 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .authIntro { text-align: center; margin-bottom: 4px; }
 .authIntro h1 { color: #f7f8f8; font-size: 25px; font-weight: 510; letter-spacing: -.55px; }
 .authIntro p { margin-top: 7px; color: #8a8f98; font-size: 14px; line-height: 1.55; }
+.authOAuth {
+  display: grid;
+  gap: 13px;
+}
+.googleAuthButton {
+  min-height: 48px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 11px;
+  border: 1px solid rgba(255,255,255,.13);
+  border-radius: 8px;
+  background: #fff;
+  color: #202124;
+  font-size: 14px;
+  font-weight: 600;
+}
+.googleAuthButton:hover:not(:disabled) {
+  background: #f4f6f8;
+  border-color: rgba(255,255,255,.3);
+  transform: translateY(-1px);
+}
+.googleAuthButton svg {
+  width: 19px;
+  height: 19px;
+}
+.authDivider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #646a74;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.authDivider::before,
+.authDivider::after {
+  content: "";
+  height: 1px;
+  flex: 1;
+  background: rgba(255,255,255,.08);
+}
 .authField {
   display: grid;
   gap: 7px;
@@ -117,6 +158,17 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   line-height: 1.45;
 }
 .authMessage.success { color: #6ee7b7; }
+.authSpamHint {
+  margin: -4px 0 0;
+  padding: 9px 11px;
+  border: 1px solid rgba(245,158,11,.18);
+  border-radius: 7px;
+  background: rgba(245,158,11,.06);
+  color: #c8a96a !important;
+  font-size: 11px;
+  line-height: 1.5;
+  text-align: center;
+}
 .authLegal {
   color: #696e78 !important;
   font-size: 11px;

@@ -62,10 +62,13 @@ const els = {
   authPasswordField: document.querySelector('#authPasswordField'),
   authPasswordLabel: document.querySelector('#authPasswordLabel'),
   authPasswordInput: document.querySelector('#authPasswordInput'),
+  authOAuth: document.querySelector('#authOAuth'),
+  googleAuthBtn: document.querySelector('#googleAuthBtn'),
   forgotPasswordBtn: document.querySelector('#forgotPasswordBtn'),
   authSubmitBtn: document.querySelector('#authSubmitBtn'),
   authModeBtn: document.querySelector('#authModeBtn'),
   authMessage: document.querySelector('#authMessage'),
+  authSpamHint: document.querySelector('#authSpamHint'),
   userEmailText: document.querySelector('#userEmailText'),
   logoutBtn: document.querySelector('#logoutBtn'),
   logoHomeBtn: document.querySelector('#logoHomeBtn'),
@@ -289,6 +292,8 @@ function setAuthMode(mode) {
   els.authEmailField.classList.toggle('hidden', isUpdate);
   els.authPasswordField.classList.toggle('hidden', isReset);
   els.forgotPasswordBtn.classList.toggle('hidden', mode !== 'login');
+  els.authOAuth.classList.toggle('hidden', isReset || isUpdate);
+  els.authSpamHint.classList.toggle('hidden', !isSignup && !isReset);
   els.authEmailInput.required = !isUpdate;
   els.authPasswordInput.required = !isReset;
   els.authPasswordInput.autocomplete = isSignup || isUpdate ? 'new-password' : 'current-password';
@@ -1532,6 +1537,30 @@ els.forgotPasswordBtn.addEventListener('click', () => {
   setAuthMode('reset');
 });
 
+els.googleAuthBtn.addEventListener('click', async () => {
+  els.googleAuthBtn.disabled = true;
+  els.authSubmitBtn.disabled = true;
+  els.authModeBtn.disabled = true;
+  els.forgotPasswordBtn.disabled = true;
+  els.authMessage.classList.remove('error', 'success');
+  els.authMessage.textContent = 'Google güvenli giriş sayfasına yönlendiriliyorsun...';
+
+  try {
+    const data = await authApi('/api/auth/oauth/google', null, { method: 'GET' });
+    if (!data.url) {
+      throw new Error('Google giriş adresi alınamadı.');
+    }
+    window.location.assign(data.url);
+  } catch (error) {
+    els.authMessage.textContent = error.message;
+    els.authMessage.classList.add('error');
+    els.googleAuthBtn.disabled = false;
+    els.authSubmitBtn.disabled = false;
+    els.authModeBtn.disabled = false;
+    els.forgotPasswordBtn.disabled = false;
+  }
+});
+
 els.historyList.addEventListener('click', (event) => {
   const button = event.target.closest('button');
   if (!button) return;
@@ -1568,6 +1597,7 @@ els.authForm.addEventListener('submit', async (event) => {
   const mode = state.auth.mode;
   const isSignup = mode === 'signup';
   els.authSubmitBtn.disabled = true;
+  els.googleAuthBtn.disabled = true;
   els.authModeBtn.disabled = true;
   els.forgotPasswordBtn.disabled = true;
   els.authMessage.classList.remove('error', 'success');
@@ -1576,7 +1606,7 @@ els.authForm.addEventListener('submit', async (event) => {
     if (mode === 'reset') {
       els.authMessage.textContent = 'Bağlantı gönderiliyor...';
       const data = await authApi('/api/auth/password-reset', { email });
-      els.authMessage.textContent = data.message || 'Sıfırlama bağlantısı e-postana gönderildi.';
+      els.authMessage.textContent = `${data.message || 'Sıfırlama bağlantısı e-postana gönderildi.'} Gelen kutunda yoksa spam veya gereksiz klasörünü kontrol et.`;
       els.authMessage.classList.add('success');
       return;
     }
@@ -1602,7 +1632,7 @@ els.authForm.addEventListener('submit', async (event) => {
     });
     if (!data.session?.access_token) {
       setAuthMode('login');
-      showAuth('Hesabın oluşturuldu. E-postandaki doğrulama bağlantısına tıkla.', false);
+      showAuth('Hesabın oluşturuldu. E-postandaki doğrulama bağlantısına tıkla. Gelen kutunda yoksa spam veya gereksiz klasörünü kontrol et.', false);
       els.authMessage.classList.add('success');
       return;
     }
@@ -1614,6 +1644,7 @@ els.authForm.addEventListener('submit', async (event) => {
     els.authMessage.classList.add('error');
   } finally {
     els.authSubmitBtn.disabled = false;
+    els.googleAuthBtn.disabled = false;
     els.authModeBtn.disabled = false;
     els.forgotPasswordBtn.disabled = false;
   }
