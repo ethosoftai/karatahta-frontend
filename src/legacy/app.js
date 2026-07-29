@@ -178,7 +178,7 @@ function failLiveManimPlayback(error) {
 
 const fragmentedMp4Player = new FragmentedMp4Player(els.liveManimVideo, {
   onConnected: () => {
-    setVideoLoading(true, 'İlk 5 saniyelik 720p60 parça hazırlanıyor...');
+    setVideoLoading(true, 'İlk gerçek ders segmenti hazırlanıyor...');
   },
   onFirstFragment: () => {
     stopPreparingProgress({ complete: true });
@@ -189,7 +189,7 @@ const fragmentedMp4Player = new FragmentedMp4Player(els.liveManimVideo, {
   onFragment: () => {
     const buffered = els.liveManimVideo.buffered;
     const bufferedUntil = buffered.length ? buffered.end(buffered.length - 1) : 0;
-    els.liveStreamText.textContent = `720P60 · ${Math.max(5, Math.floor(bufferedUntil))} saniye bufferlandı`;
+    els.liveStreamText.textContent = `720P60 · ${Math.max(1, Math.floor(bufferedUntil))} saniye hazır`;
   },
   onError: failLiveManimPlayback
 });

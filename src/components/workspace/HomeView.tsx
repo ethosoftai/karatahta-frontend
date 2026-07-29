@@ -26,9 +26,9 @@ export function HomeView() {
           </div>
 
           <div className="segmented" aria-label="Süre">
-            <button className="chip" type="button" data-minutes="2" data-segments="2">1-2 dk</button>
-            <button className="chip active" type="button" data-minutes="10" data-segments="8">8-10 dk</button>
-            <button className="chip" type="button" data-minutes="18" data-segments="15">15-20 dk</button>
+            <button className="chip" type="button" data-minutes="2" data-segments="4">1-2 dk</button>
+            <button className="chip active" type="button" data-minutes="10" data-segments="20">8-10 dk</button>
+            <button className="chip" type="button" data-minutes="18" data-segments="36">15-20 dk</button>
           </div>
 
           <button id="generatePlanBtn" className="primaryAction generateAction" type="button">
@@ -66,8 +66,8 @@ export function HomeView() {
           <option value="intermediate">Orta</option>
           <option value="advanced">İleri</option>
         </select>
-        <input id="targetMinutesInput" type="number" min="3" max="30" step="1" defaultValue="10" />
-        <input id="targetSegmentsInput" type="number" min="2" max="18" step="1" defaultValue="8" />
+        <input id="targetMinutesInput" type="number" min="1" max="30" step="1" defaultValue="10" />
+        <input id="targetSegmentsInput" type="number" min="2" max="40" step="1" defaultValue="20" />
         <input id="priorInput" type="text" defaultValue="" />
         <textarea id="interruptInput" defaultValue="" />
       </div>
