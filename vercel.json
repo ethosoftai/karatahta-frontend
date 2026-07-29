@@ -1,0 +1,5 @@
+{
+  "outputDirectory": "public",
+  "buildCommand": "echo static frontend",
+  "installCommand": "echo skip install"
+}
