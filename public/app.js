@@ -1020,11 +1020,18 @@ async function loadConfig() {
   } else if (!config.hasTtsCredentials) {
     setStatus('.env icinde GOOGLE_APPLICATION_CREDENTIALS bekleniyor', true);
   }
+  return config;
 }
 
-async function initAuth() {
+async function initAuth(config = {}) {
   loadStoredAuthSession();
   setAuthMode('login');
+
+  if (!config.authRequired) {
+    saveAuthSession(null);
+    showApp();
+    return;
+  }
 
   if (!state.auth.session?.access_token) {
     showAuth();
@@ -1494,7 +1501,7 @@ els.backHomeBtn.addEventListener('click', () => {
 });
 
 loadConfig()
-  .then(() => initAuth())
+  .then((config) => initAuth(config))
   .catch((error) => {
     showAuth(error.message, true);
     setStatus(error.message, true);
