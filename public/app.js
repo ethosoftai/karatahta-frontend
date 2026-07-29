@@ -292,6 +292,20 @@ function localVideoUrl(relativePath) {
   return relativePath ? apiUrl(`/renders/${relativePath}`) : null;
 }
 
+async function lessonVideoUrl(lessonId, video) {
+  if (video?.video_storage_path) {
+    try {
+      const data = await apiGet(`/api/lessons/${encodeURIComponent(lessonId)}/video-url`);
+      if (data.videoUrl) {
+        return data.videoUrl;
+      }
+    } catch (error) {
+      console.warn('Kalici video URL alinamadi, Railway kopyasi deneniyor.', error);
+    }
+  }
+  return localVideoUrl(video?.local_video_path);
+}
+
 async function loadLessonFromHistory(lessonId) {
   if (!lessonId) return;
   setStatus('Ders gecmisten yukleniyor...');
@@ -330,7 +344,7 @@ async function loadLessonFromHistory(lessonId) {
   renderKaraChat();
   showStudio();
 
-  const videoUrl = localVideoUrl(data.video?.local_video_path);
+  const videoUrl = await lessonVideoUrl(data.lesson.id, data.video);
   if (videoUrl) {
     els.videoOutput.src = videoUrl;
     els.videoOutput.classList.add('visible');
