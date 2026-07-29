@@ -474,6 +474,132 @@ body {
   backdrop-filter: blur(16px);
 }
 
+.workspaceLoading {
+  position: fixed;
+  z-index: 100;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(5, 6, 8, .76);
+  backdrop-filter: blur(16px);
+}
+
+.workspaceLoadingCard {
+  width: min(390px, 100%);
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  padding: 34px 28px;
+  border: 1px solid rgba(255, 255, 255, .1);
+  border-radius: 18px;
+  background: rgba(15, 16, 18, .95);
+  box-shadow: 0 30px 90px rgba(0, 0, 0, .5);
+  text-align: center;
+}
+
+.workspaceLoadingCard strong {
+  margin-top: 5px;
+  color: #f7f8f8;
+  font-size: 18px;
+}
+
+.workspaceLoadingCard > span:last-child,
+.videoLoadingPanel p {
+  color: #8f949f;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.loadingSpinner {
+  width: 34px;
+  height: 34px;
+  display: block;
+  border: 3px solid rgba(255, 255, 255, .1);
+  border-top-color: #7d86ff;
+  border-radius: 50%;
+  animation: loadingSpin .8s linear infinite;
+}
+
+.videoLoadingPanel {
+  position: absolute;
+  z-index: 4;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 12px;
+  min-height: 220px;
+  padding: 24px;
+  background: rgba(5, 5, 5, .74);
+  backdrop-filter: blur(6px);
+  pointer-events: none;
+}
+
+.videoLoadingPanel .loadingSpinner {
+  width: 38px;
+  height: 38px;
+}
+
+.chatMessage.pending {
+  min-width: 190px;
+  border-color: rgba(125, 134, 255, .22);
+  background: rgba(94, 106, 210, .08);
+}
+
+.chatThinking {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #aeb3bd;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 13px;
+}
+
+.typingDots {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.typingDots i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #8f96ff;
+  animation: typingPulse 1.2s ease-in-out infinite;
+}
+
+.typingDots i:nth-child(2) {
+  animation-delay: .15s;
+}
+
+.typingDots i:nth-child(3) {
+  animation-delay: .3s;
+}
+
+@keyframes loadingSpin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes typingPulse {
+  0%, 60%, 100% {
+    opacity: .3;
+    transform: translateY(0);
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(-3px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loadingSpinner,
+  .typingDots i {
+    animation-duration: 2.4s;
+  }
+}
+
 @media (max-width: 1180px) {
   .appShell {
     grid-template-columns: 1fr;
@@ -530,6 +656,11 @@ body {
   .homeView {
     justify-content: flex-start;
     padding: 46px 16px 32px;
+  }
+
+  .studioView {
+    justify-content: flex-start;
+    padding-top: 24px;
   }
 
   .sidebar {

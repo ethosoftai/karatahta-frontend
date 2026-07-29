@@ -48,6 +48,9 @@ const preparingMessages = [
 
 const els = {
   appShell: document.querySelector('#appShell'),
+  workspaceLoading: document.querySelector('#workspaceLoading'),
+  workspaceLoadingTitle: document.querySelector('#workspaceLoadingTitle'),
+  workspaceLoadingMessage: document.querySelector('#workspaceLoadingMessage'),
   authGate: document.querySelector('#authGate'),
   authForm: document.querySelector('#authForm'),
   authTitle: document.querySelector('#authTitle'),
@@ -101,6 +104,8 @@ const els = {
   preparingTitle: document.querySelector('#preparingTitle'),
   preparingMessage: document.querySelector('#preparingMessage'),
   preparingBar: document.querySelector('#preparingBar'),
+  videoLoadingPanel: document.querySelector('#videoLoadingPanel'),
+  videoLoadingText: document.querySelector('#videoLoadingText'),
   playerControls: document.querySelector('#playerControls'),
   playPauseBtn: document.querySelector('#playPauseBtn'),
   fullscreenBtn: document.querySelector('#fullscreenBtn'),
@@ -120,6 +125,19 @@ const els = {
 function setStatus(message, isError = false) {
   els.statusText.textContent = message;
   els.statusText.classList.toggle('error', isError);
+}
+
+function setWorkspaceLoading(loading, title = 'Ders yükleniyor', message = 'Video ve sohbet geçmişi hazırlanıyor...') {
+  els.workspaceLoadingTitle.textContent = title;
+  els.workspaceLoadingMessage.textContent = message;
+  els.workspaceLoading.classList.toggle('hidden', !loading);
+  els.workspaceLoading.setAttribute('aria-hidden', String(!loading));
+}
+
+function setVideoLoading(loading, message = 'Video yükleniyor...') {
+  els.videoLoadingText.textContent = message;
+  els.videoLoadingPanel.classList.toggle('hidden', !loading);
+  els.videoLoadingPanel.setAttribute('aria-hidden', String(!loading));
 }
 
 function startPreparingProgress(title) {
@@ -334,6 +352,8 @@ function beginNewLesson() {
   state.speechBySegment = new Map();
   resetProgressivePlayback();
   resetKaraChat();
+  setWorkspaceLoading(false);
+  setVideoLoading(false);
   renderLessonHistory();
   showHome();
   setStatus('Hazir');
@@ -429,8 +449,10 @@ async function loadLessonFromHistory(lessonId) {
 
   const videoUrl = await lessonVideoUrl(data.lesson.id, data.video);
   if (videoUrl) {
-    els.videoOutput.src = videoUrl;
     els.videoOutput.classList.add('visible');
+    setVideoLoading(true, 'Ders videosu yükleniyor...');
+    els.videoOutput.src = videoUrl;
+    els.videoOutput.load();
     state.playback.active = false;
     setDownloadVideo(videoUrl);
     updatePlayerControls();
@@ -720,9 +742,16 @@ function renderKaraChat() {
 
   els.karaChat.classList.remove('hidden');
   els.karaChat.innerHTML = state.karaChat.map((message) => `
-    <article class="chatMessage ${message.role === 'assistant' ? 'assistant' : 'user'}">
+    <article class="chatMessage ${message.role === 'assistant' ? 'assistant' : 'user'} ${message.pending ? 'pending' : ''}" ${message.pending ? 'aria-busy="true"' : ''}>
       <div class="chatMeta">${message.role === 'assistant' ? 'Kara' : `Sen · ${escapeHtml(message.timestamp || '')}`}</div>
-      <div class="chatContent">${renderMathMarkdown(message.content)}</div>
+      <div class="chatContent">
+        ${message.pending ? `
+          <div class="chatThinking">
+            <span>Kara düşünüyor</span>
+            <span class="typingDots" aria-hidden="true"><i></i><i></i><i></i></span>
+          </div>
+        ` : renderMathMarkdown(message.content)}
+      </div>
     </article>
   `).join('');
   typesetKaraChat();
@@ -1063,6 +1092,7 @@ function playSegmentAt(index, startTime = 0, shouldPlay = true) {
   };
 
   if (sourceChanged) {
+    setVideoLoading(true, 'Yeni bölüm yükleniyor...');
     els.videoOutput.addEventListener('loadedmetadata', applyStartTime, { once: true });
     els.videoOutput.src = targetUrl;
     els.videoOutput.load();
@@ -1416,6 +1446,21 @@ els.videoOutput.addEventListener('ended', () => {
 els.videoOutput.addEventListener('timeupdate', updatePlayerControls);
 els.videoOutput.addEventListener('loadedmetadata', updatePlayerControls);
 els.videoOutput.addEventListener('durationchange', updatePlayerControls);
+els.videoOutput.addEventListener('loadstart', () => {
+  if (els.videoOutput.classList.contains('visible')) {
+    setVideoLoading(true);
+  }
+});
+els.videoOutput.addEventListener('waiting', () => {
+  setVideoLoading(true, 'Video devam etmek için hazırlanıyor...');
+});
+els.videoOutput.addEventListener('stalled', () => {
+  setVideoLoading(true, 'Bağlantı bekleniyor...');
+});
+els.videoOutput.addEventListener('loadeddata', () => setVideoLoading(false));
+els.videoOutput.addEventListener('canplay', () => setVideoLoading(false));
+els.videoOutput.addEventListener('playing', () => setVideoLoading(false));
+els.videoOutput.addEventListener('error', () => setVideoLoading(false));
 els.videoOutput.addEventListener('play', () => {
   state.playback.userPaused = false;
   updatePlayerControls();
@@ -1465,7 +1510,10 @@ els.historyList.addEventListener('click', (event) => {
     return;
   }
   if (button.dataset.lessonId) {
-    loadLessonFromHistory(button.dataset.lessonId).catch((error) => setStatus(error.message, true));
+    setWorkspaceLoading(true);
+    loadLessonFromHistory(button.dataset.lessonId)
+      .catch((error) => setStatus(error.message, true))
+      .finally(() => setWorkspaceLoading(false));
   }
 });
 

@@ -24,6 +24,10 @@ export function StudioView() {
               </div>
             </div>
           </div>
+          <div id="videoLoadingPanel" className="videoLoadingPanel hidden" role="status" aria-live="polite">
+            <span className="loadingSpinner" aria-hidden="true" />
+            <p id="videoLoadingText">Video yükleniyor...</p>
+          </div>
           <video id="videoOutput" playsInline crossOrigin="anonymous" />
           <video id="preloadVideo" preload="auto" muted crossOrigin="anonymous" />
           <div id="playerControls" className="playerControls hidden">
