@@ -12,7 +12,8 @@ const state = {
   auth: {
     session: null,
     profile: null,
-    mode: 'login'
+    mode: 'login',
+    googleOAuthEnabled: false
   },
   lessons: [],
   lessonSearch: '',
@@ -292,7 +293,7 @@ function setAuthMode(mode) {
   els.authEmailField.classList.toggle('hidden', isUpdate);
   els.authPasswordField.classList.toggle('hidden', isReset);
   els.forgotPasswordBtn.classList.toggle('hidden', mode !== 'login');
-  els.authOAuth.classList.toggle('hidden', isReset || isUpdate);
+  els.authOAuth.classList.toggle('hidden', isReset || isUpdate || !state.auth.googleOAuthEnabled);
   els.authSpamHint.classList.toggle('hidden', !isSignup && !isReset);
   els.authEmailInput.required = !isUpdate;
   els.authPasswordInput.required = !isReset;
@@ -1169,6 +1170,7 @@ function maybeStartOrContinuePlayback() {
 async function loadConfig() {
   const response = await fetch(apiUrl('/api/config'));
   const config = await response.json();
+  state.auth.googleOAuthEnabled = Boolean(config.googleOAuthEnabled);
   els.configText.textContent = `${(config.llmProvider || 'LLM').toUpperCase()} | Plan ${config.planModel} | Kod ${config.codeModel} | ${config.targetVideoMinutes || 10} dk/${config.targetSegmentCount || 8} segment | TTS ${config.ttsProvider || 'TTS'} ${config.ttsVoice || 'yok'} | Manim ${config.manimQuality} | Font ${config.manimFont || 'varsayilan'}`;
   if (config.targetVideoMinutes && !els.targetMinutesInput.dataset.touched) {
     els.targetMinutesInput.value = config.targetVideoMinutes;

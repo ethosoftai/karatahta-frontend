@@ -35,7 +35,7 @@ export function AuthGate() {
             <p id="authSubtitle">Video derslerine devam etmek için giriş yap.</p>
           </div>
 
-          <div id="authOAuth" className="authOAuth">
+          <div id="authOAuth" className="authOAuth hidden">
             <button id="googleAuthBtn" className="googleAuthButton" type="button">
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path fill="#4285F4" d="M21.6 12.23c0-.71-.06-1.4-.18-2.06H12v3.9h5.38a4.6 4.6 0 0 1-2 3.01v2.53h3.24c1.9-1.75 2.98-4.33 2.98-7.38Z" />
