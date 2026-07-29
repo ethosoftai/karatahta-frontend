@@ -2,7 +2,8 @@
 deployment:
   tasks:
     - export DEPLOYPATH=/home/ethosoft/karatahta.ethosoft.org/
-    - npm ci --include=dev
-    - npm run build
     - /bin/mkdir -p "$DEPLOYPATH"
-    - /bin/cp -a dist/. "$DEPLOYPATH"
+    - /bin/cp -R -f dist/. "$DEPLOYPATH"
+    - /bin/chmod 755 "$DEPLOYPATH"
+    - /usr/bin/find "$DEPLOYPATH" -type d -exec /bin/chmod 755 {} \;
+    - /usr/bin/find "$DEPLOYPATH" -type f -exec /bin/chmod 644 {} \;
