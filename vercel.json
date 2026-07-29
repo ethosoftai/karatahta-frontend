@@ -1,5 +1,5 @@
 {
-  "outputDirectory": "public",
-  "buildCommand": "echo static frontend",
-  "installCommand": "echo skip install"
+  "outputDirectory": "dist",
+  "buildCommand": "npm run build",
+  "installCommand": "npm ci"
 }

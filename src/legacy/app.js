@@ -1,3 +1,4 @@
+// Existing production workflow, loaded after the React shell mounts.
 const API_BASE_URL = String(window.KARA_API_BASE_URL || '').replace(/\/$/, '');
 
 function apiUrl(path) {
@@ -1643,3 +1644,5 @@ loadConfig()
     showAuth(error.message, true);
     setStatus(error.message, true);
   });
+
+export {};
