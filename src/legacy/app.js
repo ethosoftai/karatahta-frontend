@@ -39,7 +39,7 @@ const state = {
     browserFailed: false,
     jobId: null,
     streamUrl: null,
-    introDurationSeconds: 8,
+    introDurationSeconds: 0,
     handoffSeconds: 0
   },
   karaChat: []
@@ -160,7 +160,7 @@ const liveBoardPlayer = new LiveBoardPlayer({
 
 function failLiveManimPlayback(error) {
   if (!state.liveManim.active && state.liveManim.browserFailed) return;
-  const introDuration = Number(state.liveManim.introDurationSeconds || 8);
+  const introDuration = Number(state.liveManim.introDurationSeconds ?? 0);
   state.liveManim.handoffSeconds = Math.max(
     0,
     Number(els.liveManimVideo.currentTime || 0) - introDuration
@@ -1136,7 +1136,7 @@ function resetLiveManimStream() {
     browserFailed: false,
     jobId: null,
     streamUrl: null,
-    introDurationSeconds: 8,
+    introDurationSeconds: 0,
     handoffSeconds: 0
   };
   els.liveManimVideo.classList.remove('visible');
@@ -1631,7 +1631,7 @@ function updateLiveManimFromJob(job) {
   const sourceChanged = state.liveManim.streamUrl !== absoluteStreamUrl;
   state.liveManim.jobId = job.id;
   state.liveManim.streamUrl = absoluteStreamUrl;
-  state.liveManim.introDurationSeconds = Number(job.liveManim?.introDurationSeconds || 8);
+  state.liveManim.introDurationSeconds = Number(job.liveManim?.introDurationSeconds ?? 0);
   state.liveManim.active = true;
   liveBoardPlayer.stop();
   els.videoOutput.pause();
