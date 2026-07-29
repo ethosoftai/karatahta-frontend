@@ -697,26 +697,12 @@ function renderSpeech() {
   els.audioOutput.classList.add('visible');
 }
 
-async function startFullLessonGeneration() {
-  const segments = state.plan?.segments || [];
-  if (!segments.length) return;
-
+async function monitorFullLessonJob(job) {
   setBusy(els.generateFullBtn, true, 'Ders Uretiliyor');
-  els.generateCodeBtn.disabled = true;
-  els.renderBtn.disabled = true;
-  els.logOutput.textContent = '';
-  els.videoOutput.classList.remove('visible');
-  els.renderMeta.textContent = '';
-  setDownloadVideo(null);
-  resetProgressivePlayback();
-  startPreparingProgress(els.lessonTitle.textContent);
   els.liveStreamBadge.classList.remove('hidden');
-  els.liveStreamText.textContent = `0/${segments.length} bölüm hazır`;
-  setVideoOverlay('Ilk bolum hazirlaniyor...');
+  els.liveStreamText.textContent = `0/${job.total || 8} bölüm hazır`;
 
   try {
-    setStatus('Tam ders uretiliyor...');
-    const job = await api('/api/full-video', { plan: state.plan, lesson_id: state.lessonId });
     const finalJob = await waitForFullVideoJob(job.id);
     els.renderMeta.textContent = 'Tam Ders';
     els.logOutput.textContent += `\nTam video: ${finalJob.result.videoUrl}`;
@@ -734,6 +720,30 @@ async function startFullLessonGeneration() {
   } finally {
     setBusy(els.generateFullBtn, false);
     renderSegments();
+  }
+}
+
+async function startFullLessonGeneration() {
+  const segments = state.plan?.segments || [];
+  if (!segments.length) return;
+
+  els.generateCodeBtn.disabled = true;
+  els.renderBtn.disabled = true;
+  els.logOutput.textContent = '';
+  els.videoOutput.classList.remove('visible');
+  els.renderMeta.textContent = '';
+  setDownloadVideo(null);
+  resetProgressivePlayback();
+  startPreparingProgress(els.lessonTitle.textContent);
+  setVideoOverlay('Ilk bolum hazirlaniyor...');
+
+  try {
+    setStatus('Tam ders uretiliyor...');
+    const job = await api('/api/full-video', { plan: state.plan, lesson_id: state.lessonId });
+    await monitorFullLessonJob(job);
+  } catch (error) {
+    stopPreparingProgress({ error: error.message });
+    setStatus(error.message, true);
   }
 }
 
@@ -1345,20 +1355,41 @@ els.generatePlanBtn.addEventListener('click', async () => {
   startPreparingProgress(initialTitle);
 
   try {
-    const data = questionImage
-      ? await api('/api/question-plan', {
-          image: questionImage,
-          student_level: els.levelInput.value,
-          note: topic
-        })
-      : await api('/api/plan', {
-          topic,
-          student_level: els.levelInput.value,
-          target_video_minutes: Number(els.targetMinutesInput.value || 10),
-          target_segment_count: Number(els.targetSegmentsInput.value || 8),
-          prior_knowledge: els.priorInput.value,
-          interrupt_question: els.interruptInput.value.trim() || null
-        });
+    if (!questionImage) {
+      const job = await api('/api/generate-lesson', {
+        topic,
+        student_level: els.levelInput.value,
+        target_video_minutes: Number(els.targetMinutesInput.value || 10),
+        target_segment_count: Number(els.targetSegmentsInput.value || 8),
+        prior_knowledge: els.priorInput.value,
+        interrupt_question: els.interruptInput.value.trim() || null
+      });
+      state.plan = job.plan || {
+        topic,
+        estimated_duration_minutes: Number(els.targetMinutesInput.value || 10),
+        segments: []
+      };
+      state.lessonId = job.lessonId || job.plan?._lesson_id || null;
+      state.selectedSegment = null;
+      state.speechBySegment = new Map();
+      els.lessonTitle.textContent = state.plan.topic || initialTitle;
+      els.codeOutput.value = '';
+      els.renderBtn.disabled = true;
+      els.generateCodeBtn.disabled = true;
+      els.liveStreamBadge.classList.remove('hidden');
+      els.liveStreamText.textContent = `0/${job.total || 8} bölüm planlanıyor`;
+      setVideoOverlay('İlk segment planlanıyor ve üretim motoru hazır tutuluyor...');
+      setStatus('İlk segment gelir gelmez video üretimi başlayacak...');
+      refreshLessonHistory().catch(() => {});
+      void monitorFullLessonJob(job);
+      return;
+    }
+
+    const data = await api('/api/question-plan', {
+      image: questionImage,
+      student_level: els.levelInput.value,
+      note: topic
+    });
     state.plan = data.plan;
     state.lessonId = data.lessonId || data.plan?._lesson_id || null;
     refreshLessonHistory().catch(() => {});
@@ -1469,6 +1500,20 @@ async function pollFullVideoJob(jobId) {
 }
 
 function applyFullVideoJobUpdate(job) {
+  const incomingPlanCount = job.plan?.segments?.length || 0;
+  const currentPlanCount = state.plan?.segments?.length || 0;
+  if (incomingPlanCount > currentPlanCount) {
+    const selectedId = state.selectedSegment?.id;
+    state.plan = job.plan;
+    state.lessonId = job.plan?._lesson_id || state.lessonId;
+    state.selectedSegment = job.plan.segments.find((segment) => segment.id === selectedId)
+      || job.plan.segments[0]
+      || null;
+    els.lessonTitle.textContent = job.plan.topic || els.lessonTitle.textContent;
+    renderPlan(state.plan);
+    renderSegments();
+    renderSegmentDetail();
+  }
   const segmentLines = (job.segments || [])
     .map((segment) => `${segment.id}: ${segment.status}${segment.videoUrl ? ` -> ${segment.videoUrl}` : ''}`)
     .join('\n');
