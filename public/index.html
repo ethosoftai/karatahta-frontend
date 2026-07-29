@@ -6,14 +6,19 @@
     <title>Kara Tahta</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
     <link rel="stylesheet" href="/styles.css">
+    <link rel="stylesheet" href="/theme-v2.css">
   </head>
   <body>
     <section id="authGate" class="authGate">
       <form id="authForm" class="authCard">
+        <div class="authBadge"><span></span> AI Video Studio</div>
         <img class="authLogo" src="/logo.png" alt="Kara Tahta">
-        <p>Devam etmek icin giris yap.</p>
+        <div class="authIntro">
+          <h1>Tekrar hoş geldin</h1>
+          <p>Yapay zekâ destekli video derslerini oluşturmaya devam et.</p>
+        </div>
         <input id="authNameInput" type="text" autocomplete="name" placeholder="Adin">
         <input id="authEmailInput" type="email" autocomplete="email" placeholder="E-posta" required>
         <input id="authPasswordInput" type="password" autocomplete="current-password" placeholder="Sifre" required>
