@@ -81,7 +81,16 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .authIntro { text-align: center; margin-bottom: 4px; }
 .authIntro h1 { color: #f7f8f8; font-size: 25px; font-weight: 510; letter-spacing: -.55px; }
 .authIntro p { margin-top: 7px; color: #8a8f98; font-size: 14px; line-height: 1.55; }
+.authField {
+  display: grid;
+  gap: 7px;
+  color: #c8cbd0;
+  font-size: 12px;
+  font-weight: 500;
+}
+.authField.hidden { display: none; }
 .authCard input {
+  width: 100%;
   min-height: 48px;
   border: 1px solid rgba(255,255,255,.09);
   border-radius: 8px;
@@ -92,7 +101,28 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .authCard input:focus { border-color: #7170ff; box-shadow: 0 0 0 3px rgba(113,112,255,.13); }
 .authCard .primaryAction { min-height: 48px; margin-top: 3px; box-shadow: 0 8px 24px rgba(94,106,210,.25), inset 0 1px rgba(255,255,255,.18); }
 .authCard .secondaryAction { min-height: 44px; }
-.authMessage { text-align: center; }
+.authLink {
+  justify-self: end;
+  margin: -3px 0 1px;
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  color: #a7aef5;
+  font-size: 12px;
+}
+.authLink:hover { color: #d0d4ff; }
+.authMessage {
+  min-height: 18px;
+  text-align: center;
+  line-height: 1.45;
+}
+.authMessage.success { color: #6ee7b7; }
+.authLegal {
+  color: #696e78 !important;
+  font-size: 11px;
+  line-height: 1.45;
+  text-align: center;
+}
 
 .sidebar { background: rgba(15,16,17,.94); border-color: rgba(255,255,255,.06); }
 .historyItem { border-radius: 7px; }

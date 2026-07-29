@@ -16,15 +16,28 @@
         <div class="authBadge"><span></span> AI Video Studio</div>
         <img class="authLogo" src="/logo.png" alt="Kara Tahta">
         <div class="authIntro">
-          <h1>Tekrar hoş geldin</h1>
-          <p>Yapay zekâ destekli video derslerini oluşturmaya devam et.</p>
+          <h1 id="authTitle">Tekrar hoş geldin</h1>
+          <p id="authSubtitle">Video derslerine devam etmek için giriş yap.</p>
         </div>
-        <input id="authNameInput" type="text" autocomplete="name" placeholder="Adin">
-        <input id="authEmailInput" type="email" autocomplete="email" placeholder="E-posta" required>
-        <input id="authPasswordInput" type="password" autocomplete="current-password" placeholder="Sifre" required>
-        <button id="authSubmitBtn" class="primaryAction" type="submit">Giris yap</button>
-        <button id="authModeBtn" class="secondaryAction" type="button">Hesap olustur</button>
-        <div id="authMessage" class="authMessage"></div>
+
+        <label id="authNameField" class="authField hidden">
+          <span>Adın</span>
+          <input id="authNameInput" type="text" autocomplete="name" placeholder="Ad Soyad">
+        </label>
+        <label id="authEmailField" class="authField">
+          <span>E-posta</span>
+          <input id="authEmailInput" type="email" autocomplete="email" placeholder="ornek@eposta.com" required>
+        </label>
+        <label id="authPasswordField" class="authField">
+          <span id="authPasswordLabel">Şifre</span>
+          <input id="authPasswordInput" type="password" autocomplete="current-password" placeholder="Şifren" required>
+        </label>
+
+        <button id="forgotPasswordBtn" class="authLink" type="button">Şifremi unuttum</button>
+        <button id="authSubmitBtn" class="primaryAction" type="submit">Giriş yap</button>
+        <button id="authModeBtn" class="secondaryAction" type="button">Hesabın yok mu? Hesap oluştur</button>
+        <div id="authMessage" class="authMessage" role="status" aria-live="polite"></div>
+        <p class="authLegal">Hesabın Supabase Auth ile güvenli şekilde korunur.</p>
       </form>
     </section>
 

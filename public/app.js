@@ -49,9 +49,16 @@ const els = {
   appShell: document.querySelector('#appShell'),
   authGate: document.querySelector('#authGate'),
   authForm: document.querySelector('#authForm'),
+  authTitle: document.querySelector('#authTitle'),
+  authSubtitle: document.querySelector('#authSubtitle'),
+  authNameField: document.querySelector('#authNameField'),
   authNameInput: document.querySelector('#authNameInput'),
+  authEmailField: document.querySelector('#authEmailField'),
   authEmailInput: document.querySelector('#authEmailInput'),
+  authPasswordField: document.querySelector('#authPasswordField'),
+  authPasswordLabel: document.querySelector('#authPasswordLabel'),
   authPasswordInput: document.querySelector('#authPasswordInput'),
+  forgotPasswordBtn: document.querySelector('#forgotPasswordBtn'),
   authSubmitBtn: document.querySelector('#authSubmitBtn'),
   authModeBtn: document.querySelector('#authModeBtn'),
   authMessage: document.querySelector('#authMessage'),
@@ -226,12 +233,87 @@ function showApp() {
 function setAuthMode(mode) {
   state.auth.mode = mode;
   const isSignup = mode === 'signup';
-  els.authNameInput.classList.toggle('hidden', !isSignup);
-  els.authSubmitBtn.textContent = isSignup ? 'Hesap olustur' : 'Giris yap';
-  els.authModeBtn.textContent = isSignup ? 'Giris yap' : 'Hesap olustur';
-  els.authPasswordInput.autocomplete = isSignup ? 'new-password' : 'current-password';
+  const isReset = mode === 'reset';
+  const isUpdate = mode === 'update-password';
+  const modeCopy = {
+    login: {
+      title: 'Tekrar hoş geldin',
+      subtitle: 'Video derslerine devam etmek için giriş yap.',
+      submit: 'Giriş yap',
+      switch: 'Hesabın yok mu? Hesap oluştur'
+    },
+    signup: {
+      title: 'Öğrenmeye başla',
+      subtitle: 'İlk yapay zekâ destekli video dersini oluştur.',
+      submit: 'Hesap oluştur',
+      switch: 'Zaten hesabın var mı? Giriş yap'
+    },
+    reset: {
+      title: 'Şifreni yenile',
+      subtitle: 'Sıfırlama bağlantısını göndereceğimiz e-postayı yaz.',
+      submit: 'Bağlantı gönder',
+      switch: 'Giriş ekranına dön'
+    },
+    'update-password': {
+      title: 'Yeni şifreni belirle',
+      subtitle: 'Hesabın için en az 8 karakterlik yeni bir şifre oluştur.',
+      submit: 'Şifreyi güncelle',
+      switch: 'Giriş ekranına dön'
+    }
+  }[mode] || {};
+
+  els.authTitle.textContent = modeCopy.title || '';
+  els.authSubtitle.textContent = modeCopy.subtitle || '';
+  els.authSubmitBtn.textContent = modeCopy.submit || '';
+  els.authModeBtn.textContent = modeCopy.switch || '';
+  els.authNameField.classList.toggle('hidden', !isSignup);
+  els.authEmailField.classList.toggle('hidden', isUpdate);
+  els.authPasswordField.classList.toggle('hidden', isReset);
+  els.forgotPasswordBtn.classList.toggle('hidden', mode !== 'login');
+  els.authEmailInput.required = !isUpdate;
+  els.authPasswordInput.required = !isReset;
+  els.authPasswordInput.autocomplete = isSignup || isUpdate ? 'new-password' : 'current-password';
+  els.authPasswordInput.minLength = isSignup || isUpdate ? 8 : 0;
+  els.authPasswordInput.placeholder = isSignup || isUpdate ? 'En az 8 karakter' : 'Şifren';
+  els.authPasswordLabel.textContent = isUpdate ? 'Yeni şifre' : 'Şifre';
+  els.authPasswordInput.value = '';
   els.authMessage.textContent = '';
-  els.authMessage.classList.remove('error');
+  els.authMessage.classList.remove('error', 'success');
+}
+
+function consumeAuthRedirect() {
+  const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+  const query = new URLSearchParams(window.location.search);
+  const accessToken = hash.get('access_token');
+  const refreshToken = hash.get('refresh_token');
+  const expiresIn = Number(hash.get('expires_in') || 3600);
+  const flow = hash.get('type') || query.get('auth');
+  const error = hash.get('error_description') || query.get('error_description');
+
+  if (accessToken) {
+    saveAuthSession({
+      access_token: accessToken,
+      refresh_token: refreshToken || null,
+      token_type: hash.get('token_type') || 'bearer',
+      expires_in: expiresIn,
+      expires_at: Math.floor(Date.now() / 1000) + expiresIn
+    });
+  }
+
+  if (window.location.hash || query.has('auth') || query.has('error_description')) {
+    query.delete('auth');
+    query.delete('error');
+    query.delete('error_code');
+    query.delete('error_description');
+    const cleanUrl = `${window.location.pathname}${query.toString() ? `?${query}` : ''}`;
+    window.history.replaceState({}, document.title, cleanUrl);
+  }
+
+  return {
+    error,
+    isRecovery: flow === 'recovery' && Boolean(accessToken),
+    isConfirmed: flow === 'confirmed' || flow === 'signup'
+  };
 }
 
 function shortDate(value) {
@@ -1039,7 +1121,8 @@ async function loadConfig() {
 
 async function initAuth(config = {}) {
   loadStoredAuthSession();
-  setAuthMode('login');
+  const redirect = consumeAuthRedirect();
+  setAuthMode(redirect.isRecovery ? 'update-password' : 'login');
 
   if (!config.authRequired) {
     saveAuthSession(null);
@@ -1047,8 +1130,19 @@ async function initAuth(config = {}) {
     return;
   }
 
+  if (redirect.error) {
+    saveAuthSession(null);
+    showAuth(`Bağlantı geçersiz veya süresi dolmuş: ${redirect.error}`, true);
+    return;
+  }
+
+  if (redirect.isRecovery) {
+    showAuth('Yeni şifreni belirleyebilirsin.');
+    return;
+  }
+
   if (!state.auth.session?.access_token) {
-    showAuth();
+    showAuth(redirect.isConfirmed ? 'E-posta adresin doğrulandı. Şimdi giriş yapabilirsin.' : '');
     return;
   }
 
@@ -1358,6 +1452,10 @@ els.authModeBtn.addEventListener('click', () => {
   setAuthMode(state.auth.mode === 'login' ? 'signup' : 'login');
 });
 
+els.forgotPasswordBtn.addEventListener('click', () => {
+  setAuthMode('reset');
+});
+
 els.historyList.addEventListener('click', (event) => {
   const button = event.target.closest('button');
   if (!button) return;
@@ -1388,13 +1486,36 @@ els.authForm.addEventListener('submit', async (event) => {
   const email = els.authEmailInput.value.trim();
   const password = els.authPasswordInput.value;
   const displayName = els.authNameInput.value.trim();
-  const isSignup = state.auth.mode === 'signup';
+  const mode = state.auth.mode;
+  const isSignup = mode === 'signup';
   els.authSubmitBtn.disabled = true;
   els.authModeBtn.disabled = true;
-  els.authMessage.textContent = isSignup ? 'Hesap olusturuluyor...' : 'Giris yapiliyor...';
-  els.authMessage.classList.remove('error');
+  els.forgotPasswordBtn.disabled = true;
+  els.authMessage.classList.remove('error', 'success');
 
   try {
+    if (mode === 'reset') {
+      els.authMessage.textContent = 'Bağlantı gönderiliyor...';
+      const data = await authApi('/api/auth/password-reset', { email });
+      els.authMessage.textContent = data.message || 'Sıfırlama bağlantısı e-postana gönderildi.';
+      els.authMessage.classList.add('success');
+      return;
+    }
+
+    if (mode === 'update-password') {
+      els.authMessage.textContent = 'Şifren güncelleniyor...';
+      await authApi('/api/auth/password-update', { password });
+      els.authMessage.textContent = 'Şifren güncellendi. Hesabın açılıyor...';
+      els.authMessage.classList.add('success');
+      const data = await authApi('/api/auth/me', null, { method: 'GET' });
+      state.auth.profile = data.profile || state.auth.profile;
+      saveAuthSession(state.auth.session, state.auth.profile);
+      showApp();
+      setStatus('Hazır');
+      return;
+    }
+
+    els.authMessage.textContent = isSignup ? 'Hesabın oluşturuluyor...' : 'Giriş yapılıyor...';
     const data = await authApi(isSignup ? '/api/auth/signup' : '/api/auth/login', {
       email,
       password,
@@ -1402,7 +1523,8 @@ els.authForm.addEventListener('submit', async (event) => {
     });
     if (!data.session?.access_token) {
       setAuthMode('login');
-      showAuth('Hesap olustu. E-posta onayi gerekiyorsa onayladiktan sonra giris yap.', false);
+      showAuth('Hesabın oluşturuldu. E-postandaki doğrulama bağlantısına tıkla.', false);
+      els.authMessage.classList.add('success');
       return;
     }
     saveAuthSession(data.session, data.profile);
@@ -1414,6 +1536,7 @@ els.authForm.addEventListener('submit', async (event) => {
   } finally {
     els.authSubmitBtn.disabled = false;
     els.authModeBtn.disabled = false;
+    els.forgotPasswordBtn.disabled = false;
   }
 });
 
