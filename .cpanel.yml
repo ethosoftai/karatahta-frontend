@@ -1,0 +1,6 @@
+---
+deployment:
+  tasks:
+    - export DEPLOYPATH=/home/ethosoft/karatahta.ethosoft.org/
+    - /bin/mkdir -p "$DEPLOYPATH"
+    - /bin/cp -a public/. "$DEPLOYPATH"
