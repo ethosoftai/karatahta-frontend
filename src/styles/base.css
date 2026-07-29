@@ -611,6 +611,21 @@ p {
   background: #050505;
 }
 
+.liveBoardCanvas {
+  display: none;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: #071512;
+}
+
+.liveBoardCanvas.visible {
+  display: block;
+}
+
+#liveBoardAudio {
+  display: none;
+}
+
 #videoOutput.visible {
   display: block;
 }

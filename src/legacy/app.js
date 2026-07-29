@@ -1,3 +1,5 @@
+import { LiveBoardPlayer } from './liveBoardPlayer.js';
+
 // Existing production workflow, loaded after the React shell mounts.
 const API_BASE_URL = String(window.KARA_API_BASE_URL || '').replace(/\/$/, '');
 
@@ -112,6 +114,8 @@ const els = {
   preparingBar: document.querySelector('#preparingBar'),
   videoLoadingPanel: document.querySelector('#videoLoadingPanel'),
   videoLoadingText: document.querySelector('#videoLoadingText'),
+  liveBoardCanvas: document.querySelector('#liveBoardCanvas'),
+  liveBoardAudio: document.querySelector('#liveBoardAudio'),
   playerControls: document.querySelector('#playerControls'),
   playPauseBtn: document.querySelector('#playPauseBtn'),
   fullscreenBtn: document.querySelector('#fullscreenBtn'),
@@ -127,6 +131,20 @@ const els = {
   logOutput: document.querySelector('#logOutput'),
   renderMeta: document.querySelector('#renderMeta')
 };
+
+const liveBoardPlayer = new LiveBoardPlayer({
+  canvas: els.liveBoardCanvas,
+  audio: els.liveBoardAudio,
+  onStatus: (message) => {
+    els.liveStreamText.textContent = message;
+  },
+  onPlaybackBlocked: () => {
+    setVideoOverlay('Canlı anlatımı başlatmak için tahtaya dokun.');
+  },
+  onEnded: () => {
+    setVideoOverlay('İlk kaliteli video bölümü hazırlanıyor...');
+  }
+});
 
 function setStatus(message, isError = false) {
   els.statusText.textContent = message;
@@ -1073,6 +1091,7 @@ function resetProgressivePlayback() {
   els.videoOutput.removeAttribute('src');
   els.videoOutput.load();
   els.videoOutput.classList.remove('visible');
+  liveBoardPlayer.stop();
   els.preloadVideo.removeAttribute('src');
   els.preloadVideo.load();
   els.liveStreamBadge.classList.add('hidden');
@@ -1114,6 +1133,9 @@ function playSegmentAt(index, startTime = 0, shouldPlay = true) {
 
   const targetUrl = absoluteVideoUrl(segment.videoUrl);
   const sourceChanged = els.videoOutput.getAttribute('src') !== targetUrl;
+  if (liveBoardPlayer.isActive) {
+    liveBoardPlayer.stop();
+  }
   state.playback.active = true;
   state.playback.waitingForNext = false;
   state.playback.currentIndex = index;
@@ -1158,7 +1180,13 @@ function preloadNextSegment() {
 
 function maybeStartOrContinuePlayback() {
   if (!state.playback.active && state.playback.playable.length) {
-    playSegmentAt(0);
+    const liveSnapshot = liveBoardPlayer.snapshot();
+    const firstSegment = state.playback.playable[0];
+    const matchingLiveSegment = liveSnapshot.active && liveSnapshot.segmentId === firstSegment.id;
+    const transitionTime = matchingLiveSegment
+      ? Math.min(liveSnapshot.currentTime, Math.max(0, segmentDuration(firstSegment, 0) - 0.25))
+      : 0;
+    playSegmentAt(0, transitionTime);
     return;
   }
 
@@ -1403,6 +1431,7 @@ function applyFullVideoJobUpdate(job) {
     .map((segment) => `${segment.id}: ${segment.status}${segment.videoUrl ? ` -> ${segment.videoUrl}` : ''}`)
     .join('\n');
 
+  updateLiveBoardFromJob(job);
   updatePlayableSegments(job);
   maybeStartOrContinuePlayback();
   els.liveStreamBadge.classList.toggle('hidden', job.status === 'done' || job.status === 'failed');
@@ -1417,6 +1446,33 @@ function applyFullVideoJobUpdate(job) {
     segmentLines
   ].join('\n');
   setStatus(`${job.progress}/${job.total} segment | ${job.current || job.status}`);
+}
+
+function updateLiveBoardFromJob(job) {
+  const firstSegment = job.segments?.[0];
+  const liveBoard = firstSegment?.liveBoard;
+  const hasCommands = Array.isArray(liveBoard?.commands) && liveBoard.commands.length > 0;
+  const audioUrl = firstSegment?.tts?.audioUrl;
+
+  if (
+    state.playback.active
+    || firstSegment?.videoUrl
+    || !hasCommands
+    || !audioUrl
+    || job.status === 'failed'
+  ) {
+    return;
+  }
+
+  stopPreparingProgress({ complete: true });
+  els.videoOutput.classList.remove('visible');
+  setVideoOverlay('', false);
+  liveBoardPlayer.update({
+    segmentId: firstSegment.id,
+    audioUrl: absoluteVideoUrl(audioUrl),
+    durationSeconds: firstSegment.tts.durationSeconds,
+    commands: liveBoard.commands
+  });
 }
 
 async function streamFullVideoJob(jobId) {
@@ -1583,6 +1639,19 @@ els.videoOutput.addEventListener('pause', () => {
 
 els.videoOutput.addEventListener('click', () => {
   togglePlayback();
+});
+
+els.liveBoardCanvas.addEventListener('click', () => {
+  if (liveBoardPlayer.playbackBlocked) {
+    liveBoardPlayer.retryPlayback();
+    setVideoOverlay('', false);
+    return;
+  }
+  if (els.liveBoardAudio.paused) {
+    liveBoardPlayer.retryPlayback();
+  } else {
+    els.liveBoardAudio.pause();
+  }
 });
 
 document.querySelector('.videoShell').addEventListener('mousemove', showPlayerControlsTemporarily);

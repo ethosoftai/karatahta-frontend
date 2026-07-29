@@ -33,6 +33,8 @@ export function StudioView() {
             <span className="loadingSpinner" aria-hidden="true" />
             <p id="videoLoadingText">Video yükleniyor...</p>
           </div>
+          <canvas id="liveBoardCanvas" className="liveBoardCanvas" aria-label="Gemini canlı karatahta animasyonu" aria-hidden="true" />
+          <audio id="liveBoardAudio" preload="auto" crossOrigin="anonymous" />
           <video id="videoOutput" playsInline crossOrigin="anonymous" />
           <video id="preloadVideo" preload="auto" muted crossOrigin="anonymous" />
           <div id="playerControls" className="playerControls hidden">
