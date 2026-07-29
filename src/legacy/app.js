@@ -753,13 +753,16 @@ async function monitorFullLessonJob(job) {
 
   try {
     const finalJob = await waitForFullVideoJob(job.id);
-    els.renderMeta.textContent = 'Tam Ders';
+    const canonicalLive = finalJob.result?.source === 'live_manim';
+    els.renderMeta.textContent = canonicalLive ? 'Canlı Ders · Aynı Final' : 'Tam Ders';
     els.logOutput.textContent += `\nTam video: ${finalJob.result.videoUrl}`;
     state.playback.finalVideoUrl = finalJob.result.videoUrl;
     setDownloadVideo(finalJob.result.videoUrl);
     maybeStartOrContinuePlayback();
     refreshLessonHistory().catch(() => {});
-    setStatus('Tam ders videosu hazir. Izleme akisi devam ediyor.');
+    setStatus(canonicalLive
+      ? 'İzlediğin canlı ders aynı görüntüyle kaydedildi.'
+      : 'Tam ders videosu hazir. Izleme akisi devam ediyor.');
   } catch (error) {
     els.logOutput.textContent = [error.message, error.details?.stdout, error.details?.stderr]
       .filter(Boolean)
@@ -1351,7 +1354,7 @@ async function loadConfig() {
     const keyName = config.llmProvider === 'groq' ? 'GROQ_API_KEY' : 'GEMINI_API_KEY';
     setStatus(`.env icinde ${keyName} bekleniyor`, true);
   } else if (!config.hasTtsCredentials) {
-    setStatus('.env icinde GOOGLE_APPLICATION_CREDENTIALS bekleniyor', true);
+    setStatus(`${config.ttsProvider || 'TTS'} kimlik bilgileri eksik`, true);
   }
   return config;
 }
@@ -1621,6 +1624,7 @@ function applyFullVideoJobUpdate(job) {
     `Ilerleme: ${job.progress}/${job.total}`,
     `Mesaj: ${job.message || ''}`,
     `Anlik: ${job.current || ''}`,
+    `Video kaynağı: ${job.result?.source || 'canlı üretim'}`,
     '',
     segmentLines
   ].join('\n');
@@ -1883,7 +1887,10 @@ els.liveManimVideo.addEventListener('ended', () => {
   // never disappears and the user can replay it without switching elements.
   state.liveManim.active = true;
   els.liveStreamBadge.classList.add('hidden');
-  setVideoOverlay('Canlı ders tamamlandı. Tekrar oynatmak için videoya dokun.', false);
+  setVideoOverlay(
+    'Canlı ders tamamlandı ve gördüğün görüntü final video olarak kaydedildi. Tekrar oynatmak için videoya dokun.',
+    false
+  );
   updateKaraAskVisibility();
 });
 els.liveManimVideo.addEventListener('error', () => {
