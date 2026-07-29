@@ -40,7 +40,8 @@ const state = {
     jobId: null,
     streamUrl: null,
     introDurationSeconds: 0,
-    handoffSeconds: 0
+    handoffSeconds: 0,
+    lastPlaybackSeconds: 0
   },
   karaChat: []
 };
@@ -161,9 +162,13 @@ const liveBoardPlayer = new LiveBoardPlayer({
 function failLiveManimPlayback(error) {
   if (!state.liveManim.active && state.liveManim.browserFailed) return;
   const introDuration = Number(state.liveManim.introDurationSeconds ?? 0);
+  const lastPlaybackSeconds = Math.max(
+    Number(state.liveManim.lastPlaybackSeconds || 0),
+    Number(els.liveManimVideo.currentTime || 0)
+  );
   state.liveManim.handoffSeconds = Math.max(
     0,
-    Number(els.liveManimVideo.currentTime || 0) - introDuration
+    lastPlaybackSeconds - introDuration
   );
   state.liveManim.active = false;
   state.liveManim.enabled = false;
@@ -190,6 +195,11 @@ const fragmentedMp4Player = new FragmentedMp4Player(els.liveManimVideo, {
     const buffered = els.liveManimVideo.buffered;
     const bufferedUntil = buffered.length ? buffered.end(buffered.length - 1) : 0;
     els.liveStreamText.textContent = `720P60 · ${Math.max(1, Math.floor(bufferedUntil))} saniye hazır`;
+  },
+  onInterrupted: () => {
+    // Valid fragments stay playable. The regular video "ended" handler will
+    // hand off from the captured timestamp after the buffered lesson is shown.
+    state.liveManim.failed = true;
   },
   onError: failLiveManimPlayback
 });
@@ -1137,7 +1147,8 @@ function resetLiveManimStream() {
     jobId: null,
     streamUrl: null,
     introDurationSeconds: 0,
-    handoffSeconds: 0
+    handoffSeconds: 0,
+    lastPlaybackSeconds: 0
   };
   els.liveManimVideo.classList.remove('visible');
 }
@@ -1286,10 +1297,7 @@ function maybeStartOrContinuePlayback() {
       let cursor = 0;
       for (let index = 0; index < state.playback.playable.length; index += 1) {
         const duration = segmentDuration(state.playback.playable[index], index);
-        if (
-          handoffSeconds <= cursor + duration
-          || index === state.playback.playable.length - 1
-        ) {
+        if (handoffSeconds <= cursor + duration) {
           playSegmentAt(
             index,
             Math.min(
@@ -1301,6 +1309,11 @@ function maybeStartOrContinuePlayback() {
         }
         cursor += duration;
       }
+      // The archive has not caught up with the live playback position yet.
+      // Preserve the last live frame instead of replaying the newest segment.
+      setVideoLoading(false);
+      setVideoOverlay('Hazır video aynı noktaya yetişiyor; son kare korunuyor.');
+      return;
     }
     const liveSnapshot = liveBoardPlayer.snapshot();
     const firstSegment = state.playback.playable[0];
@@ -1618,8 +1631,14 @@ function updateLiveManimFromJob(job) {
   state.liveManim.enabled = Boolean(job.liveManimEnabled);
   state.liveManim.failed = job.liveManim?.status === 'failed';
   if (state.liveManim.browserFailed) return;
-  if (!state.liveManim.enabled || state.liveManim.failed) {
-    if (state.liveManim.active) resetLiveManimStream();
+  if (!state.liveManim.enabled) {
+    if (!state.liveManim.active) maybeStartOrContinuePlayback();
+    return;
+  }
+  if (state.liveManim.failed) {
+    // Do not reset the MediaSource here: doing so zeroes currentTime before
+    // the stream reader/ended event can capture the handoff position.
+    if (!state.liveManim.active) maybeStartOrContinuePlayback();
     return;
   }
 
@@ -1849,7 +1868,17 @@ els.liveManimVideo.addEventListener('playing', () => {
   setVideoOverlay('', false);
   updateKaraAskVisibility();
 });
+els.liveManimVideo.addEventListener('timeupdate', () => {
+  const currentTime = Number(els.liveManimVideo.currentTime || 0);
+  if (Number.isFinite(currentTime) && currentTime > state.liveManim.lastPlaybackSeconds) {
+    state.liveManim.lastPlaybackSeconds = currentTime;
+  }
+});
 els.liveManimVideo.addEventListener('ended', () => {
+  if (state.liveManim.failed || state.liveManim.browserFailed) {
+    failLiveManimPlayback(new Error('Canlı akışın kullanılabilir kısmı tamamlandı.'));
+    return;
+  }
   // Keep the completed MediaSource video as the active player so the frame
   // never disappears and the user can replay it without switching elements.
   state.liveManim.active = true;

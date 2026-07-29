@@ -42,6 +42,7 @@ export class FragmentedMp4Player {
     onConnected,
     onFirstFragment,
     onFragment,
+    onInterrupted,
     onEnded,
     onError
   } = {}) {
@@ -49,6 +50,7 @@ export class FragmentedMp4Player {
     this.onConnected = onConnected;
     this.onFirstFragment = onFirstFragment;
     this.onFragment = onFragment;
+    this.onInterrupted = onInterrupted;
     this.onEnded = onEnded;
     this.onError = onError;
     this.generation = 0;
@@ -138,6 +140,24 @@ export class FragmentedMp4Player {
       this.maybeEndStream();
     } catch (error) {
       if (error?.name === 'AbortError' || generation !== this.generation) return;
+      // The backend can lose only the final FFmpeg/trailer bytes after already
+      // sending valid fMP4 fragments. Keep those fragments playable instead of
+      // tearing down a lesson which is already on screen.
+      if (
+        this.initQueued
+        && (
+          this.fragmentCount > 0
+          || this.fragmentParts.length > 0
+          || this.appendQueue.some((item) => item.media)
+          || this.activeAppend?.media
+        )
+      ) {
+        this.flushTrailingFragment();
+        this.streamEnded = true;
+        this.maybeEndStream();
+        this.onInterrupted?.(error instanceof Error ? error : new Error(String(error)));
+        return;
+      }
       this.fail(error, generation);
     }
   }
