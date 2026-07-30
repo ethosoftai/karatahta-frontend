@@ -126,6 +126,9 @@ const els = {
   preparingTitle: document.querySelector('#preparingTitle'),
   preparingMessage: document.querySelector('#preparingMessage'),
   preparingBar: document.querySelector('#preparingBar'),
+  stagePlan: document.querySelector('#stagePlan'),
+  stageMedia: document.querySelector('#stageMedia'),
+  stagePlayback: document.querySelector('#stagePlayback'),
   videoLoadingPanel: document.querySelector('#videoLoadingPanel'),
   videoLoadingText: document.querySelector('#videoLoadingText'),
   liveManimVideo: document.querySelector('#liveManimVideo'),
@@ -170,9 +173,12 @@ function failLiveManimPlayback(error) {
 const progressiveManimPlayer = new ProgressiveManimPlayer(els.liveManimVideo, {
   getHeaders: authHeaders,
   onConnected: () => {
-    setVideoLoading(true, 'İlk gerçek Manim parçaları hazırlanıyor...');
+    setVideoLoading(true, 'İlk segment alındı; gerçek Manim parçaları hazırlanıyor...');
   },
   onPlaybackReady: () => {
+    setGenerationStage(els.stagePlan, 'done');
+    setGenerationStage(els.stageMedia, 'done');
+    setGenerationStage(els.stagePlayback, 'done');
     stopPreparingProgress({ complete: true });
     els.liveManimVideo.classList.add('visible');
     setVideoLoading(false);
@@ -182,7 +188,7 @@ const progressiveManimPlayer = new ProgressiveManimPlayer(els.liveManimVideo, {
     els.liveStreamText.textContent = `720P30 · ${Math.max(1, Math.floor(bufferedAhead))} saniye tamponda`;
   },
   onBuffering: () => {
-    setVideoLoading(true, 'Render oynatmaya yetişiyor; aynı zaman çizgisinde bekleniyor...');
+    setVideoLoading(true, 'Sıradaki render hazırlanıyor; oynatma aynı karede kısa süre bekliyor...');
   },
   onEnded: () => setVideoLoading(false),
   onError: failLiveManimPlayback
@@ -212,6 +218,9 @@ function startPreparingProgress(title) {
   els.preparingTitle.textContent = title || els.lessonTitle.textContent || 'Ders hazırlanıyor';
   els.preparingMessage.textContent = preparingMessages[0];
   els.preparingBar.style.width = `${preparingProgress}%`;
+  setGenerationStage(els.stagePlan, 'active');
+  setGenerationStage(els.stageMedia, 'waiting');
+  setGenerationStage(els.stagePlayback, 'waiting');
   els.preparingPanel.classList.remove('hidden');
   setVideoOverlay('', false);
 
@@ -246,6 +255,94 @@ function stopPreparingProgress({ complete = false, error = null } = {}) {
     els.preparingBar.style.width = '100%';
   }
   els.preparingPanel.classList.add('hidden');
+}
+
+function setGenerationStage(element, status) {
+  if (!element) return;
+  element.classList.toggle('active', status === 'active');
+  element.classList.toggle('done', status === 'done');
+}
+
+function streamingPreparationMessage(job) {
+  const planCount = job.plan?.segments?.length || 0;
+  const total = Math.max(planCount, Number(job.total || 0));
+  const remainingPlan = Math.max(0, total - planCount);
+  const firstStatus = job.segments?.[0]?.status || 'queued';
+  const readyCount = Number(job.progressive?.readyCount || 0);
+  const readySeconds = Math.floor(Number(job.progressive?.readyDurationSeconds || 0));
+
+  if (!planCount) return 'İlk segment canlı olarak planlanıyor...';
+  if (readyCount > 0) {
+    return `${readyCount} gerçek video parçası hazır (${readySeconds} sn tampon).${remainingPlan ? ` Kalan ${remainingPlan} segment arkada planlanıyor.` : ''}`;
+  }
+  if (firstStatus === 'render') {
+    return `İlk segment 720p30 render ediliyor.${remainingPlan ? ` Kalan ${remainingPlan} segment arkada planlanıyor.` : ''}`;
+  }
+  if (['tts_code', 'code', 'ready_to_render'].includes(firstStatus)) {
+    return `İlk segment hazır; ses ve Manim kodu paralel üretiliyor.${remainingPlan ? ` Kalan ${remainingPlan} segment arkada planlanıyor.` : ''}`;
+  }
+  if (firstStatus === 'speech') {
+    return `İlk segment hazır; anlatım ve görsel akış hazırlanıyor.${remainingPlan ? ` Kalan ${remainingPlan} segment arkada planlanıyor.` : ''}`;
+  }
+  return `İlk segment alındı ve üretim sırasına girdi.${remainingPlan ? ` Kalan ${remainingPlan} segment arkada planlanıyor.` : ''}`;
+}
+
+function updateStreamingPreparation(job) {
+  if (!job) return;
+  clearTimeout(preparingTimer);
+
+  const planCount = job.plan?.segments?.length || 0;
+  const total = Math.max(planCount, Number(job.total || 0), 1);
+  const readyCount = Number(job.progressive?.readyCount || 0);
+  const readySeconds = Number(job.progressive?.readyDurationSeconds || 0);
+  const bufferTarget = Math.max(1, Number(job.progressive?.bufferTargetSeconds || 12));
+  const playbackReady = Boolean(job.progressive?.playbackReadyAt)
+    || job.progressive?.status === 'ready'
+    || job.progressive?.status === 'done';
+  const firstStatus = job.segments?.[0]?.status || 'queued';
+  const mediaStarted = !['queued', 'speech'].includes(firstStatus);
+
+  setGenerationStage(els.stagePlan, planCount > 0 ? 'done' : 'active');
+  setGenerationStage(
+    els.stageMedia,
+    readyCount > 0 ? 'done' : (planCount > 0 ? 'active' : 'waiting')
+  );
+  setGenerationStage(
+    els.stagePlayback,
+    playbackReady ? 'done' : (readyCount > 0 ? 'active' : 'waiting')
+  );
+
+  let actualProgress = planCount > 0 ? 24 : 8;
+  if (mediaStarted) actualProgress = 46;
+  if (firstStatus === 'render') actualProgress = 64;
+  if (readyCount > 0) {
+    actualProgress = 68 + Math.min(24, (readySeconds / bufferTarget) * 24);
+  }
+  if (playbackReady) actualProgress = 100;
+  preparingProgress = Math.max(preparingProgress, actualProgress);
+  els.preparingTitle.textContent = job.plan?.topic || els.lessonTitle.textContent || 'Ders hazırlanıyor';
+  els.preparingMessage.textContent = streamingPreparationMessage(job);
+  els.preparingBar.style.width = `${Math.min(100, preparingProgress)}%`;
+
+  if (!playbackReady && job.status !== 'failed' && job.status !== 'done') {
+    els.preparingPanel.classList.remove('hidden');
+  }
+}
+
+function liveProductionText(job) {
+  const planCount = job.plan?.segments?.length || 0;
+  const total = Math.max(planCount, Number(job.total || 0));
+  const readyCount = Number(job.progressive?.readyCount || 0);
+  const readySeconds = Math.floor(Number(job.progressive?.readyDurationSeconds || 0));
+  const planSuffix = planCount < total ? ` · plan ${planCount}/${total}` : '';
+
+  if (readyCount > 0) {
+    return `720P30 MANIM · ${readyCount} gerçek parça · ${readySeconds} sn hazır${planSuffix}`;
+  }
+  if (planCount > 0) {
+    return `İlk segment üretimde${planSuffix}`;
+  }
+  return `İlk segment planlanıyor · plan 0/${total || '?'}`;
 }
 
 function showStudio() {
@@ -771,7 +868,8 @@ function renderSpeech() {
 async function monitorFullLessonJob(job) {
   setBusy(els.generateFullBtn, true, 'Ders Uretiliyor');
   els.liveStreamBadge.classList.remove('hidden');
-  els.liveStreamText.textContent = `0/${job.total || 8} bölüm hazır`;
+  updateStreamingPreparation(job);
+  els.liveStreamText.textContent = liveProductionText(job);
 
   try {
     const finalJob = await waitForFullVideoJob(job.id);
@@ -1471,16 +1569,18 @@ els.generatePlanBtn.addEventListener('click', async () => {
         segments: []
       };
       state.lessonId = job.lessonId || job.plan?._lesson_id || null;
-      state.selectedSegment = null;
+      state.selectedSegment = state.plan.segments?.[0] || null;
       state.speechBySegment = new Map();
       els.lessonTitle.textContent = state.plan.topic || initialTitle;
+      renderPlan(state.plan);
+      renderSegments();
+      renderSegmentDetail();
       els.codeOutput.value = '';
       els.renderBtn.disabled = true;
       els.generateCodeBtn.disabled = true;
       els.liveStreamBadge.classList.remove('hidden');
-      els.liveStreamText.textContent = `0/${job.total || 8} bölüm planlanıyor`;
-      setVideoOverlay('İlk segment planlanıyor ve üretim motoru hazır tutuluyor...');
-      setStatus('İlk segment gelir gelmez video üretimi başlayacak...');
+      applyFullVideoJobUpdate(job);
+      setStatus('İlk segment alındı; video üretimi başladı, kalan plan arkada tamamlanıyor.');
       refreshLessonHistory().catch(() => {});
       void monitorFullLessonJob(job);
       return;
@@ -1619,6 +1719,7 @@ function applyFullVideoJobUpdate(job) {
     .map((segment) => `${segment.id}: ${segment.status}${segment.videoUrl ? ` -> ${segment.videoUrl}` : ''}`)
     .join('\n');
 
+  updateStreamingPreparation(job);
   updateLiveManimFromJob(job);
   updatePlayableSegments(job);
   maybeStartOrContinuePlayback();
@@ -1628,7 +1729,7 @@ function applyFullVideoJobUpdate(job) {
     job.status === 'failed' || (job.status === 'done' && !liveManimRunning)
   );
   els.liveStreamText.textContent = job.progressive?.enabled
-    ? `720P30 MANIM · ${job.progressive?.readyCount || 0} gerçek parça · ${Math.floor(job.progressive?.readyDurationSeconds || 0)} sn hazır${job.current ? ` · ${job.current}` : ''}`
+    ? liveProductionText(job)
     : `${job.progress}/${job.total} bölüm hazır${job.current ? ` · ${job.current}` : ''}`;
   els.logOutput.textContent = [
     `Job: ${job.id}`,
@@ -1640,7 +1741,9 @@ function applyFullVideoJobUpdate(job) {
     '',
     segmentLines
   ].join('\n');
-  setStatus(`${job.progress}/${job.total} segment | ${job.current || job.status}`);
+  setStatus(job.progressive?.readyCount
+    ? `${Math.floor(job.progressive.readyDurationSeconds || 0)} saniye hazır | ${job.current || job.status}`
+    : streamingPreparationMessage(job));
 }
 
 function updateLiveManimFromJob(job) {
@@ -1672,7 +1775,10 @@ function updateLiveManimFromJob(job) {
   state.liveManim.active = true;
   els.videoOutput.pause();
   els.videoOutput.classList.remove('visible');
-  setVideoOverlay(progressive.status === 'ready' ? '' : 'Gerçek Manim parçaları tamponlanıyor...', progressive.status !== 'ready');
+  setVideoOverlay(
+    progressive.status === 'ready' ? '' : streamingPreparationMessage(job),
+    progressive.status !== 'ready'
+  );
   void syncProgressiveManifest(job);
 }
 

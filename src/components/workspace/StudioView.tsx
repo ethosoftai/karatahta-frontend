@@ -24,6 +24,11 @@ export function StudioView() {
             <div className="preparingContent">
               <h3 id="preparingTitle">Ders hazırlanıyor</h3>
               <p id="preparingMessage">Plan kuruluyor...</p>
+              <div id="generationStages" className="generationStages" aria-label="Üretim aşamaları">
+                <span id="stagePlan" className="generationStage active">İlk segment</span>
+                <span id="stageMedia" className="generationStage">Ses + Manim</span>
+                <span id="stagePlayback" className="generationStage">Canlı oynatma</span>
+              </div>
               <div className="preparingTrack" aria-hidden="true">
                 <div id="preparingBar" className="preparingBar" />
               </div>

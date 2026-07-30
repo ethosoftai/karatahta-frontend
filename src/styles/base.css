@@ -588,6 +588,35 @@ p {
   font-size: 14px;
 }
 
+.generationStages {
+  width: min(460px, 100%);
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.generationStage {
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 650;
+  transition: border-color 180ms ease, background 180ms ease, color 180ms ease;
+}
+
+.generationStage.active {
+  border-color: color-mix(in srgb, var(--primary) 58%, transparent);
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+  color: #fff;
+}
+
+.generationStage.done {
+  border-color: rgba(74, 222, 128, 0.34);
+  background: rgba(74, 222, 128, 0.08);
+  color: #bbf7d0;
+}
+
 .preparingTrack {
   width: min(460px, 100%);
   height: 5px;
@@ -602,6 +631,12 @@ p {
   border-radius: inherit;
   background: var(--primary);
   transition: width 850ms ease;
+}
+
+@media (max-width: 560px) {
+  .generationStages {
+    grid-template-columns: 1fr;
+  }
 }
 
 #videoOutput {
