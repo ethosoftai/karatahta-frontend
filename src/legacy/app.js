@@ -1,5 +1,4 @@
-import { LiveBoardPlayer } from './liveBoardPlayer.js';
-import { FragmentedMp4Player } from './fragmentedMp4Player.js';
+import { ProgressiveManimPlayer } from './progressiveManimPlayer.js';
 
 // Existing production workflow, loaded after the React shell mounts.
 const API_BASE_URL = String(window.KARA_API_BASE_URL || '').replace(/\/$/, '');
@@ -39,6 +38,8 @@ const state = {
     browserFailed: false,
     jobId: null,
     streamUrl: null,
+    manifestLoading: false,
+    manifestPromise: null,
     introDurationSeconds: 0,
     handoffSeconds: 0,
     lastPlaybackSeconds: 0
@@ -128,8 +129,6 @@ const els = {
   videoLoadingPanel: document.querySelector('#videoLoadingPanel'),
   videoLoadingText: document.querySelector('#videoLoadingText'),
   liveManimVideo: document.querySelector('#liveManimVideo'),
-  liveBoardCanvas: document.querySelector('#liveBoardCanvas'),
-  liveBoardAudio: document.querySelector('#liveBoardAudio'),
   playerControls: document.querySelector('#playerControls'),
   playPauseBtn: document.querySelector('#playPauseBtn'),
   fullscreenBtn: document.querySelector('#fullscreenBtn'),
@@ -145,20 +144,6 @@ const els = {
   logOutput: document.querySelector('#logOutput'),
   renderMeta: document.querySelector('#renderMeta')
 };
-
-const liveBoardPlayer = new LiveBoardPlayer({
-  canvas: els.liveBoardCanvas,
-  audio: els.liveBoardAudio,
-  onStatus: (message) => {
-    els.liveStreamText.textContent = message;
-  },
-  onPlaybackBlocked: () => {
-    setVideoOverlay('Canlı anlatımı başlatmak için tahtaya dokun.');
-  },
-  onEnded: () => {
-    setVideoOverlay('İlk kaliteli video bölümü hazırlanıyor...');
-  }
-});
 
 function failLiveManimPlayback(error) {
   if (!state.liveManim.active && state.liveManim.browserFailed) return;
@@ -182,26 +167,24 @@ function failLiveManimPlayback(error) {
   maybeStartOrContinuePlayback();
 }
 
-const fragmentedMp4Player = new FragmentedMp4Player(els.liveManimVideo, {
+const progressiveManimPlayer = new ProgressiveManimPlayer(els.liveManimVideo, {
+  getHeaders: authHeaders,
   onConnected: () => {
-    setVideoLoading(true, 'İlk gerçek ders segmenti hazırlanıyor...');
+    setVideoLoading(true, 'İlk gerçek Manim parçaları hazırlanıyor...');
   },
-  onFirstFragment: () => {
+  onPlaybackReady: () => {
     stopPreparingProgress({ complete: true });
     els.liveManimVideo.classList.add('visible');
     setVideoLoading(false);
     setVideoOverlay('', false);
   },
-  onFragment: () => {
-    const buffered = els.liveManimVideo.buffered;
-    const bufferedUntil = buffered.length ? buffered.end(buffered.length - 1) : 0;
-    els.liveStreamText.textContent = `720P60 · ${Math.max(1, Math.floor(bufferedUntil))} saniye hazır`;
+  onPartial: (_partial, bufferedAhead) => {
+    els.liveStreamText.textContent = `720P30 · ${Math.max(1, Math.floor(bufferedAhead))} saniye tamponda`;
   },
-  onInterrupted: () => {
-    // Valid fragments stay playable. The regular video "ended" handler will
-    // hand off from the captured timestamp after the buffered lesson is shown.
-    state.liveManim.failed = true;
+  onBuffering: () => {
+    setVideoLoading(true, 'Render oynatmaya yetişiyor; aynı zaman çizgisinde bekleniyor...');
   },
+  onEnded: () => setVideoLoading(false),
   onError: failLiveManimPlayback
 });
 
@@ -792,8 +775,8 @@ async function monitorFullLessonJob(job) {
 
   try {
     const finalJob = await waitForFullVideoJob(job.id);
-    const canonicalLive = finalJob.result?.source === 'live_manim';
-    els.renderMeta.textContent = canonicalLive ? 'Canlı Ders · Aynı Final' : 'Tam Ders';
+    const canonicalLive = finalJob.result?.source === 'progressive_partials';
+    els.renderMeta.textContent = canonicalLive ? 'Gerçek Manim Akışı · Aynı Final' : 'Tam Ders';
     els.logOutput.textContent += `\nTam video: ${finalJob.result.videoUrl}`;
     state.playback.finalVideoUrl = finalJob.result.videoUrl;
     setDownloadVideo(finalJob.result.videoUrl);
@@ -1180,7 +1163,7 @@ function setDownloadVideo(videoUrl) {
 }
 
 function resetLiveManimStream() {
-  fragmentedMp4Player.stop();
+  progressiveManimPlayer.stop();
   state.liveManim = {
     active: false,
     enabled: false,
@@ -1188,6 +1171,8 @@ function resetLiveManimStream() {
     browserFailed: false,
     jobId: null,
     streamUrl: null,
+    manifestLoading: false,
+    manifestPromise: null,
     introDurationSeconds: 0,
     handoffSeconds: 0,
     lastPlaybackSeconds: 0
@@ -1230,7 +1215,6 @@ function resetProgressivePlayback() {
   els.videoOutput.load();
   els.videoOutput.classList.remove('visible');
   resetLiveManimStream();
-  liveBoardPlayer.stop();
   els.preloadVideo.removeAttribute('src');
   els.preloadVideo.load();
   els.liveStreamBadge.classList.add('hidden');
@@ -1272,9 +1256,6 @@ function playSegmentAt(index, startTime = 0, shouldPlay = true) {
 
   const targetUrl = absoluteVideoUrl(segment.videoUrl);
   const sourceChanged = els.videoOutput.getAttribute('src') !== targetUrl;
-  if (liveBoardPlayer.isActive) {
-    liveBoardPlayer.stop();
-  }
   state.playback.active = true;
   state.playback.waitingForNext = false;
   state.playback.currentIndex = index;
@@ -1358,13 +1339,7 @@ function maybeStartOrContinuePlayback() {
       setVideoOverlay('Hazır video aynı noktaya yetişiyor; son kare korunuyor.');
       return;
     }
-    const liveSnapshot = liveBoardPlayer.snapshot();
-    const firstSegment = state.playback.playable[0];
-    const matchingLiveSegment = liveSnapshot.active && liveSnapshot.segmentId === firstSegment.id;
-    const transitionTime = matchingLiveSegment
-      ? Math.min(liveSnapshot.currentTime, Math.max(0, segmentDuration(firstSegment, 0) - 0.25))
-      : 0;
-    playSegmentAt(0, transitionTime);
+    playSegmentAt(0, 0);
     return;
   }
 
@@ -1645,9 +1620,6 @@ function applyFullVideoJobUpdate(job) {
     .join('\n');
 
   updateLiveManimFromJob(job);
-  if (!state.liveManim.active) {
-    updateLiveBoardFromJob(job);
-  }
   updatePlayableSegments(job);
   maybeStartOrContinuePlayback();
   const liveManimRunning = state.liveManim.active && !els.liveManimVideo.ended;
@@ -1655,8 +1627,8 @@ function applyFullVideoJobUpdate(job) {
     'hidden',
     job.status === 'failed' || (job.status === 'done' && !liveManimRunning)
   );
-  els.liveStreamText.textContent = job.liveManimEnabled
-    ? `MANIM · ${job.liveManim?.renderedActions || 0}/${job.liveManim?.generatedActions || 0} aksiyon${job.current ? ` · ${job.current}` : ''}`
+  els.liveStreamText.textContent = job.progressive?.enabled
+    ? `720P30 MANIM · ${job.progressive?.readyCount || 0} gerçek parça · ${Math.floor(job.progressive?.readyDurationSeconds || 0)} sn hazır${job.current ? ` · ${job.current}` : ''}`
     : `${job.progress}/${job.total} bölüm hazır${job.current ? ` · ${job.current}` : ''}`;
   els.logOutput.textContent = [
     `Job: ${job.id}`,
@@ -1672,8 +1644,9 @@ function applyFullVideoJobUpdate(job) {
 }
 
 function updateLiveManimFromJob(job) {
-  state.liveManim.enabled = Boolean(job.liveManimEnabled);
-  state.liveManim.failed = job.liveManim?.status === 'failed';
+  const progressive = job.progressive;
+  state.liveManim.enabled = Boolean(progressive?.enabled);
+  state.liveManim.failed = progressive?.status === 'failed';
   if (state.liveManim.browserFailed) return;
   if (!state.liveManim.enabled) {
     if (!state.liveManim.active) maybeStartOrContinuePlayback();
@@ -1686,58 +1659,62 @@ function updateLiveManimFromJob(job) {
     return;
   }
 
-  const canPlay = ['streaming', 'finishing', 'done'].includes(job.liveManim?.status);
-  const streamUrl = job.liveManim?.streamUrl;
-  if (!canPlay || !streamUrl) return;
-
-  const absoluteStreamUrl = absoluteVideoUrl(streamUrl);
-  const sourceChanged = state.liveManim.streamUrl !== absoluteStreamUrl;
-  state.liveManim.jobId = job.id;
-  state.liveManim.streamUrl = absoluteStreamUrl;
-  state.liveManim.introDurationSeconds = Number(job.liveManim?.introDurationSeconds ?? 0);
+  const sourceChanged = state.liveManim.jobId !== job.id;
+  if (sourceChanged) {
+    state.liveManim.jobId = job.id;
+    state.liveManim.streamUrl = `/api/jobs/${encodeURIComponent(job.id)}/stream-manifest`;
+    progressiveManimPlayer.start({
+      jobId: job.id,
+      lessonId: job.lessonId || state.lessonId,
+      bufferTargetSeconds: progressive.bufferTargetSeconds
+    });
+  }
   state.liveManim.active = true;
-  liveBoardPlayer.stop();
   els.videoOutput.pause();
   els.videoOutput.classList.remove('visible');
-  setVideoOverlay('', false);
-
-  if (sourceChanged) {
-    setVideoLoading(true, 'Kesintisiz 720p60 akışa bağlanılıyor...');
-    fragmentedMp4Player.start(absoluteStreamUrl).catch(failLiveManimPlayback);
-  }
+  setVideoOverlay(progressive.status === 'ready' ? '' : 'Gerçek Manim parçaları tamponlanıyor...', progressive.status !== 'ready');
+  void syncProgressiveManifest(job);
 }
 
-function updateLiveBoardFromJob(job) {
-  const firstSegment = job.segments?.[0];
-  const liveBoard = firstSegment?.liveBoard;
-  const hasCommands = Array.isArray(liveBoard?.commands) && liveBoard.commands.length > 0;
-  const audioUrl = firstSegment?.tts?.audioUrl;
-
+function syncProgressiveManifest(job) {
   if (
-    state.playback.active
-    || firstSegment?.videoUrl
-    || !hasCommands
-    || !audioUrl
-    || job.status === 'failed'
-  ) {
-    return;
-  }
-
-  stopPreparingProgress({ complete: true });
-  els.videoOutput.classList.remove('visible');
-  setVideoOverlay('', false);
-  liveBoardPlayer.update({
-    segmentId: firstSegment.id,
-    audioUrl: absoluteVideoUrl(audioUrl),
-    durationSeconds: firstSegment.tts.durationSeconds,
-    commands: liveBoard.commands
+    state.liveManim.jobId !== job.id
+    || !state.liveManim.streamUrl
+  ) return Promise.resolve();
+  if (state.liveManim.manifestPromise) return state.liveManim.manifestPromise;
+  state.liveManim.manifestLoading = true;
+  const manifestPromise = (async () => {
+    const response = await fetch(apiUrl(state.liveManim.streamUrl), {
+      cache: 'no-store',
+      headers: authHeaders()
+    });
+    const manifest = await response.json();
+    if (!response.ok) {
+      throw new Error(manifest.error || 'Progressive video manifesti alınamadı.');
+    }
+    if (state.liveManim.jobId !== job.id || state.lessonId !== manifest.lessonId) return;
+    manifest.partials = (manifest.partials || []).map((partial) => ({
+      ...partial,
+      url: apiUrl(partial.url)
+    }));
+    await progressiveManimPlayer.sync(manifest);
+  })().catch((error) => {
+    failLiveManimPlayback(error);
+  }).finally(() => {
+    state.liveManim.manifestLoading = false;
+    if (state.liveManim.manifestPromise === manifestPromise) {
+      state.liveManim.manifestPromise = null;
+    }
   });
+  state.liveManim.manifestPromise = manifestPromise;
+  return manifestPromise;
 }
 
-async function streamFullVideoJob(jobId) {
+async function streamFullVideoJob(jobId, { afterEventId = 0, reconnectAttempt = 0 } = {}) {
   const response = await fetch(apiUrl(`/api/jobs/${jobId}/events`), {
     headers: {
       Accept: 'text/event-stream',
+      ...(afterEventId ? { 'Last-Event-ID': String(afterEventId) } : {}),
       ...authHeaders()
     }
   });
@@ -1749,6 +1726,7 @@ async function streamFullVideoJob(jobId) {
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
+  let lastEventId = Number(afterEventId || 0);
 
   while (true) {
     const { value, done } = await reader.read();
@@ -1758,6 +1736,10 @@ async function streamFullVideoJob(jobId) {
     while (boundary !== -1) {
       const block = buffer.slice(0, boundary);
       buffer = buffer.slice(boundary + 2);
+      const eventIdLine = block.split('\n').find((line) => line.startsWith('id:'));
+      if (eventIdLine) {
+        lastEventId = Number(eventIdLine.slice(3).trim()) || lastEventId;
+      }
       const dataText = block
         .split('\n')
         .filter((line) => line.startsWith('data:'))
@@ -1767,6 +1749,8 @@ async function streamFullVideoJob(jobId) {
         const job = JSON.parse(dataText);
         applyFullVideoJobUpdate(job);
         if (job.status === 'done') {
+          await syncProgressiveManifest(job);
+          await syncProgressiveManifest(job);
           await reader.cancel().catch(() => {});
           setDownloadVideo(job.result?.videoUrl);
           return job;
@@ -1781,6 +1765,13 @@ async function streamFullVideoJob(jobId) {
     }
 
     if (done) {
+      if (reconnectAttempt < 3) {
+        await new Promise((resolve) => setTimeout(resolve, 500 * (reconnectAttempt + 1)));
+        return streamFullVideoJob(jobId, {
+          afterEventId: lastEventId,
+          reconnectAttempt: reconnectAttempt + 1
+        });
+      }
       throw new Error('Canlı üretim bağlantısı tamamlanmadan kapandı.');
     }
   }
@@ -1901,10 +1892,10 @@ els.videoOutput.addEventListener('click', () => {
 });
 
 els.liveManimVideo.addEventListener('loadstart', () => {
-  setVideoLoading(true, 'Canlı Manim akışına bağlanılıyor...');
+  setVideoLoading(true, 'Gerçek 720p30 Manim parçaları bağlanıyor...');
 });
 els.liveManimVideo.addEventListener('waiting', () => {
-  setVideoLoading(true, 'Gemini’nin sıradaki Manim aksiyonu bekleniyor...');
+  progressiveManimPlayer.markBuffering();
 });
 els.liveManimVideo.addEventListener('canplay', () => setVideoLoading(false));
 els.liveManimVideo.addEventListener('playing', () => {
@@ -1942,19 +1933,6 @@ els.liveManimVideo.addEventListener('click', () => {
     els.liveManimVideo.play().catch(() => {});
   } else {
     els.liveManimVideo.pause();
-  }
-});
-
-els.liveBoardCanvas.addEventListener('click', () => {
-  if (liveBoardPlayer.playbackBlocked) {
-    liveBoardPlayer.retryPlayback();
-    setVideoOverlay('', false);
-    return;
-  }
-  if (els.liveBoardAudio.paused) {
-    liveBoardPlayer.retryPlayback();
-  } else {
-    els.liveBoardAudio.pause();
   }
 });
 

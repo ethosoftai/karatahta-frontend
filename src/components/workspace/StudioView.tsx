@@ -34,8 +34,6 @@ export function StudioView() {
             <p id="videoLoadingText">Video yükleniyor...</p>
           </div>
           <video id="liveManimVideo" className="liveManimVideo" playsInline autoPlay crossOrigin="anonymous" />
-          <canvas id="liveBoardCanvas" className="liveBoardCanvas" aria-label="Gemini canlı karatahta animasyonu" aria-hidden="true" />
-          <audio id="liveBoardAudio" preload="auto" crossOrigin="anonymous" />
           <video id="videoOutput" playsInline crossOrigin="anonymous" />
           <video id="preloadVideo" preload="auto" muted crossOrigin="anonymous" />
           <div id="playerControls" className="playerControls hidden">
