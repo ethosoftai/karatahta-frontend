@@ -80,6 +80,10 @@ export function manifestBelongsTo(manifest, jobId, lessonId) {
   );
 }
 
+export function hasPlaybackBuffer(bufferedSeconds, targetSeconds) {
+  return Number(bufferedSeconds || 0) >= Math.max(2, Number(targetSeconds || 6));
+}
+
 export class ProgressiveManimPlayer {
   constructor(video, {
     getHeaders = () => ({}),
@@ -243,7 +247,7 @@ export class ProgressiveManimPlayer {
     this.queuedSequences.delete(partial.sequence);
     this.nextSequence += 1;
     this.onPartial?.(partial, this.bufferedAhead());
-    if (!this.playbackStarted && this.totalBuffered() >= this.bufferTargetSeconds) {
+    if (!this.playbackStarted && hasPlaybackBuffer(this.totalBuffered(), this.bufferTargetSeconds)) {
       this.playbackStarted = true;
       this.onPlaybackReady?.();
       this.video.play().catch(() => {});
