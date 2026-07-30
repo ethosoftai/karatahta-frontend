@@ -49,6 +49,7 @@ const state = {
 let controlsHideTimer = null;
 let preparingTimer = null;
 let preparingProgress = 0;
+let lessonLoadVersion = 0;
 
 const preparingMessages = [
   'Ders akışı kuruluyor...',
@@ -430,6 +431,7 @@ function shortDate(value) {
 }
 
 function beginNewLesson() {
+  lessonLoadVersion += 1;
   state.plan = null;
   state.lessonId = null;
   state.selectedSegment = null;
@@ -498,59 +500,96 @@ async function lessonVideoUrl(lessonId, video, signedVideoUrl = null) {
 
 async function loadLessonFromHistory(lessonId) {
   if (!lessonId) return;
-  setStatus('Ders gecmisten yukleniyor...');
-  const data = await apiGet(`/api/lessons/${encodeURIComponent(lessonId)}`);
-  const plan = data.plan || {
-    topic: data.lesson?.topic || data.lesson?.title || 'Ders',
-    estimated_duration_minutes: data.lesson?.target_minutes || null,
-    segments: (data.segments || []).map((segment) => ({
-      id: segment.segment_key,
-      title: segment.title,
-      duration_seconds: segment.duration_seconds,
-      learning_objective: segment.learning_objective,
-      narration: segment.narration,
-      animation: segment.animation_json
-    }))
-  };
-  plan._lesson_id = data.lesson.id;
+  const requestedLessonId = String(lessonId);
+  const loadVersion = ++lessonLoadVersion;
 
-  state.plan = plan;
-  state.lessonId = data.lesson.id;
-  state.selectedSegment = plan.segments?.[0] || null;
-  state.speechBySegment = new Map();
-  state.playback.finalVideoUrl = null;
+  state.lessonId = requestedLessonId;
   resetProgressivePlayback();
-  state.karaChat = (data.messages || []).map((message) => ({
-    role: message.role,
-    timestamp: message.timestamp_label || '',
-    content: message.content
-  }));
-
-  els.lessonTitle.textContent = data.lesson.title || plan.topic || 'Ders';
-  renderPlan(plan);
-  renderSegments();
-  renderSegmentDetail();
-  renderSpeech();
-  renderKaraChat();
-  showStudio();
-
-  const videoUrl = await lessonVideoUrl(data.lesson.id, data.video, data.videoUrl);
-  if (videoUrl) {
-    els.videoOutput.classList.add('visible');
-    setVideoLoading(true, 'Ders videosu yükleniyor...');
-    els.videoOutput.src = videoUrl;
-    els.videoOutput.load();
-    state.playback.active = false;
-    setDownloadVideo(videoUrl);
-    updatePlayerControls();
-    setStatus('Ders gecmisten yuklendi.');
-  } else {
-    setDownloadVideo(null);
-    setVideoOverlay('Bu ders icin video kaydi bulunamadi.', true);
-    updateKaraAskVisibility();
-    setStatus('Ders gecmisten yuklendi, video bulunamadi.');
-  }
+  setVideoLoading(true, 'Ders videosu hazırlanıyor...');
+  setWorkspaceLoading(true);
   renderLessonHistory();
+  setStatus('Ders gecmisten yukleniyor...');
+  try {
+    const data = await apiGet(`/api/lessons/${encodeURIComponent(requestedLessonId)}`);
+    if (loadVersion !== lessonLoadVersion) return;
+    if (String(data.lesson?.id || '') !== requestedLessonId) {
+      throw new Error('Sunucu farklı bir ders kaydı döndürdü.');
+    }
+
+    const plan = data.plan || {
+      topic: data.lesson?.topic || data.lesson?.title || 'Ders',
+      estimated_duration_minutes: data.lesson?.target_minutes || null,
+      segments: (data.segments || []).map((segment) => ({
+        id: segment.segment_key,
+        title: segment.title,
+        duration_seconds: segment.duration_seconds,
+        learning_objective: segment.learning_objective,
+        narration: segment.narration,
+        animation: segment.animation_json
+      }))
+    };
+    plan._lesson_id = data.lesson.id;
+
+    state.plan = plan;
+    state.lessonId = data.lesson.id;
+    state.selectedSegment = plan.segments?.[0] || null;
+    state.speechBySegment = new Map();
+    state.karaChat = (data.messages || []).map((message) => ({
+      role: message.role,
+      timestamp: message.timestamp_label || '',
+      content: message.content
+    }));
+
+    els.lessonTitle.textContent = data.lesson.title || plan.topic || 'Ders';
+    renderPlan(plan);
+    renderSegments();
+    renderSegmentDetail();
+    renderSpeech();
+    renderKaraChat();
+    showStudio();
+
+    const videoUrl = await lessonVideoUrl(data.lesson.id, data.video, data.videoUrl);
+    if (loadVersion !== lessonLoadVersion || state.lessonId !== requestedLessonId) return;
+
+    if (videoUrl) {
+      setVideoLoading(true, 'Ders videosu yükleniyor...');
+      els.videoOutput.dataset.lessonId = requestedLessonId;
+      els.videoOutput.addEventListener('loadeddata', () => {
+        if (
+          loadVersion !== lessonLoadVersion
+          || els.videoOutput.dataset.lessonId !== requestedLessonId
+        ) {
+          return;
+        }
+        els.videoOutput.classList.add('visible');
+        setVideoLoading(false);
+        updateKaraAskVisibility();
+      }, { once: true });
+      els.videoOutput.src = videoUrl;
+      els.videoOutput.load();
+      state.playback.active = false;
+      state.playback.finalVideoUrl = videoUrl;
+      setDownloadVideo(videoUrl);
+      updatePlayerControls();
+      setStatus('Ders gecmisten yuklendi.');
+    } else {
+      setVideoLoading(false);
+      setDownloadVideo(null);
+      setVideoOverlay('Bu ders icin video kaydi bulunamadi.', true);
+      updateKaraAskVisibility();
+      setStatus('Ders gecmisten yuklendi, video bulunamadi.');
+    }
+    renderLessonHistory();
+  } catch (error) {
+    if (loadVersion === lessonLoadVersion) {
+      setVideoLoading(false);
+      setStatus(error.message, true);
+    }
+  } finally {
+    if (loadVersion === lessonLoadVersion) {
+      setWorkspaceLoading(false);
+    }
+  }
 }
 
 async function authApi(path, payload = null, options = {}) {
@@ -1187,6 +1226,7 @@ function resetProgressivePlayback() {
   };
   els.videoOutput.pause();
   els.videoOutput.removeAttribute('src');
+  els.videoOutput.removeAttribute('data-lesson-id');
   els.videoOutput.load();
   els.videoOutput.classList.remove('visible');
   resetLiveManimStream();
@@ -1977,10 +2017,7 @@ els.historyList.addEventListener('click', (event) => {
     return;
   }
   if (button.dataset.lessonId) {
-    setWorkspaceLoading(true);
-    loadLessonFromHistory(button.dataset.lessonId)
-      .catch((error) => setStatus(error.message, true))
-      .finally(() => setWorkspaceLoading(false));
+    void loadLessonFromHistory(button.dataset.lessonId);
   }
 });
 
