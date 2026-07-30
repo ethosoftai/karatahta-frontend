@@ -11,7 +11,7 @@ repo yalnız frontend'i içerir; üretim API'si ayrı bir Railway servisinde
 | Frontend | `https://karatahta.ethosoft.org` |
 | Backend API | `https://karatahta-backend-production.up.railway.app` |
 | Frontend repo | `https://github.com/ethosoftai/karatahta-frontend` (`main`) |
-| Backend repo | `https://github.com/Ahmet2001/karatahta-backend` (`railway`) |
+| Backend repo | `https://github.com/ethosoftai/karatahta-backend` (`railway`) |
 | Frontend hosting | Hazalhost cPanel |
 | Backend hosting | Railway |
 | Auth ve ilişkisel veri | Supabase |
@@ -198,7 +198,7 @@ commitlenmelidir.
 
 API response, auth, SSE veya progressive manifest sözleşmesi değiştiğinde:
 
-1. Backend değişikliğini `Ahmet2001/karatahta-backend` reposunun `railway`
+1. Backend değişikliğini `ethosoftai/karatahta-backend` reposunun `railway`
    branch'ine commit/push et.
 2. Railway deployment'ın aynı commit ile başarılı olduğunu doğrula.
 3. Gerekli frontend uyarlamasını bu repoda yap.
