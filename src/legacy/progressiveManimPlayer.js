@@ -94,6 +94,13 @@ export function partialTimeline(partial) {
   };
 }
 
+export function applyAppendWindow(sourceBuffer, appendWindow) {
+  // The new start can equal the previous end. Grow the end first because
+  // browsers reject appendWindowStart >= the currently configured end.
+  sourceBuffer.appendWindowEnd = appendWindow.endSeconds;
+  sourceBuffer.appendWindowStart = appendWindow.startSeconds;
+}
+
 export function contiguousBufferedAhead(buffered, currentTime = 0, toleranceSeconds = 0.12) {
   if (!buffered?.length) return 0;
   const cursor = Math.max(0, Number(currentTime || 0));
@@ -234,8 +241,7 @@ export class ProgressiveManimPlayer {
       this.sourceBuffer.addEventListener('error', failed, { once: true });
       try {
         if (appendWindow) {
-          this.sourceBuffer.appendWindowEnd = appendWindow.endSeconds;
-          this.sourceBuffer.appendWindowStart = appendWindow.startSeconds;
+          applyAppendWindow(this.sourceBuffer, appendWindow);
         }
         if (Number.isFinite(timestampOffset)) this.sourceBuffer.timestampOffset = timestampOffset;
         this.sourceBuffer.appendBuffer(data);

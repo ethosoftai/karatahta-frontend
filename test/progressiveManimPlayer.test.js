@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  applyAppendWindow,
   contiguousBufferedAhead,
   hasPlaybackBuffer,
   manifestBelongsTo,
@@ -80,6 +81,16 @@ test('partial MSE zaman penceresi backend zaman cizelgesini aynen kullanir', () 
     startSeconds: 6.4,
     endSeconds: 13.3
   });
+});
+
+test('yeni MSE penceresinde once bitis buyutulur sonra baslangic ilerletilir', () => {
+  const calls = [];
+  const sourceBuffer = {
+    set appendWindowEnd(value) { calls.push(['end', value]); },
+    set appendWindowStart(value) { calls.push(['start', value]); }
+  };
+  applyAppendWindow(sourceBuffer, { startSeconds: 8, endSeconds: 15 });
+  assert.deepEqual(calls, [['end', 15], ['start', 8]]);
 });
 
 test('kucuk kare yuvarlama bosluklarini tek kesintisiz tampon sayar', () => {
