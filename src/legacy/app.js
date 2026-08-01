@@ -40,9 +40,17 @@ const state = {
     streamUrl: null,
     manifestLoading: false,
     manifestPromise: null,
+    manifestDirty: false,
     introDurationSeconds: 0,
     handoffSeconds: 0,
     lastPlaybackSeconds: 0
+  },
+  developer: {
+    lastJob: null,
+    lastManifest: null,
+    bufferedAhead: 0,
+    events: [],
+    lastEventKey: null
   },
   karaChat: []
 };
@@ -136,6 +144,7 @@ const els = {
   playPauseBtn: document.querySelector('#playPauseBtn'),
   fullscreenBtn: document.querySelector('#fullscreenBtn'),
   seekBar: document.querySelector('#seekBar'),
+  timelineSegments: document.querySelector('#timelineSegments'),
   currentTimeText: document.querySelector('#currentTimeText'),
   durationText: document.querySelector('#durationText'),
   videoOverlay: document.querySelector('#videoOverlay'),
@@ -145,6 +154,11 @@ const els = {
   karaSendBtn: document.querySelector('#karaSendBtn'),
   karaChat: document.querySelector('#karaChat'),
   logOutput: document.querySelector('#logOutput'),
+  developerConsoleStatus: document.querySelector('#developerConsoleStatus'),
+  developerJobMetric: document.querySelector('#developerJobMetric'),
+  developerStateMetric: document.querySelector('#developerStateMetric'),
+  developerProgressMetric: document.querySelector('#developerProgressMetric'),
+  developerBufferMetric: document.querySelector('#developerBufferMetric'),
   renderMeta: document.querySelector('#renderMeta')
 };
 
@@ -167,6 +181,10 @@ function failLiveManimPlayback(error) {
   setVideoOverlay(
     `Son kare korunuyor; hazır video aynı noktadan devam edecek.${error?.message ? ` ${error.message}` : ''}`
   );
+  appendDeveloperEvent('error', 'Canlı oynatma arşiv segmentlerine devredildi.', {
+    message: error?.message || String(error || 'Bilinmeyen hata'),
+    handoffSeconds: state.liveManim.handoffSeconds
+  });
   maybeStartOrContinuePlayback();
 }
 
@@ -174,6 +192,7 @@ const progressiveManimPlayer = new ProgressiveManimPlayer(els.liveManimVideo, {
   getHeaders: authHeaders,
   onConnected: () => {
     setVideoLoading(true, 'İlk segment alındı; gerçek Manim parçaları hazırlanıyor...');
+    appendDeveloperEvent('stream', 'MediaSource bağlantısı açıldı.');
   },
   onPlaybackReady: () => {
     setGenerationStage(els.stagePlan, 'done');
@@ -183,14 +202,28 @@ const progressiveManimPlayer = new ProgressiveManimPlayer(els.liveManimVideo, {
     els.liveManimVideo.classList.add('visible');
     setVideoLoading(false);
     setVideoOverlay('', false);
+    appendDeveloperEvent('playback', 'Canlı oynatma için yeterli tampon hazır.');
+    updatePlayerControls();
   },
-  onPartial: (_partial, bufferedAhead) => {
+  onPartial: (partial, bufferedAhead) => {
+    state.developer.bufferedAhead = Number(bufferedAhead || 0);
     els.liveStreamText.textContent = `720P30 · ${Math.max(1, Math.floor(bufferedAhead))} saniye tamponda`;
+    appendDeveloperEvent(
+      'partial',
+      `Parça ${Number(partial?.sequence || 0) + 1} oynatma tamponuna eklendi.`,
+      { durationSeconds: partial?.durationSeconds, bufferedAhead }
+    );
+    updatePlayerControls();
   },
-  onBuffering: () => {
+  onBuffering: (bufferedAhead) => {
+    state.developer.bufferedAhead = Number(bufferedAhead || 0);
     setVideoLoading(true, 'Sıradaki render hazırlanıyor; oynatma aynı karede kısa süre bekliyor...');
+    appendDeveloperEvent('buffering', 'Oynatma sıradaki render parçasını bekliyor.', { bufferedAhead });
   },
-  onEnded: () => setVideoLoading(false),
+  onEnded: () => {
+    setVideoLoading(false);
+    appendDeveloperEvent('stream', 'Canlı video akışı tamamlandı.');
+  },
   onError: failLiveManimPlayback
 });
 
@@ -875,7 +908,10 @@ async function monitorFullLessonJob(job) {
     const finalJob = await waitForFullVideoJob(job.id);
     const canonicalLive = finalJob.result?.source === 'progressive_partials';
     els.renderMeta.textContent = canonicalLive ? 'Gerçek Manim Akışı · Aynı Final' : 'Tam Ders';
-    els.logOutput.textContent += `\nTam video: ${finalJob.result.videoUrl}`;
+    appendDeveloperEvent('done', 'Tam video kaydedildi.', {
+      videoUrl: finalJob.result.videoUrl,
+      source: finalJob.result?.source
+    });
     state.playback.finalVideoUrl = finalJob.result.videoUrl;
     setDownloadVideo(finalJob.result.videoUrl);
     maybeStartOrContinuePlayback();
@@ -884,9 +920,11 @@ async function monitorFullLessonJob(job) {
       ? 'İzlediğin canlı ders aynı görüntüyle kaydedildi.'
       : 'Tam ders videosu hazir. Izleme akisi devam ediyor.');
   } catch (error) {
-    els.logOutput.textContent = [error.message, error.details?.stdout, error.details?.stderr]
-      .filter(Boolean)
-      .join('\n\n');
+    appendDeveloperEvent('error', 'Tam ders üretimi başarısız oldu.', {
+      message: error.message,
+      stdout: error.details?.stdout,
+      stderr: error.details?.stderr
+    });
     stopPreparingProgress({ error: error.message });
     setStatus(error.message, true);
   } finally {
@@ -937,6 +975,103 @@ function formatTime(seconds) {
   const minutes = Math.floor(safeSeconds / 60);
   const rest = safeSeconds % 60;
   return `${minutes}:${String(rest).padStart(2, '0')}`;
+}
+
+function resetDeveloperConsole() {
+  state.developer = {
+    lastJob: null,
+    lastManifest: null,
+    bufferedAhead: 0,
+    events: [],
+    lastEventKey: null
+  };
+  renderDeveloperConsole();
+}
+
+function appendDeveloperEvent(type, message, details = null) {
+  const eventKey = `${type}:${message}:${JSON.stringify(details || null)}`;
+  if (state.developer.lastEventKey === eventKey) {
+    renderDeveloperConsole();
+    return;
+  }
+  state.developer.lastEventKey = eventKey;
+  state.developer.events.push({
+    at: new Date().toISOString(),
+    type,
+    message,
+    details
+  });
+  if (state.developer.events.length > 80) {
+    state.developer.events.splice(0, state.developer.events.length - 80);
+  }
+  renderDeveloperConsole();
+}
+
+function renderDeveloperConsole() {
+  const job = state.developer.lastJob;
+  const manifest = state.developer.lastManifest;
+  const readySeconds = Number(
+    manifest?.readyDurationSeconds
+    ?? job?.progressive?.readyDurationSeconds
+    ?? 0
+  );
+  const bufferSeconds = Math.max(0, Number(state.developer.bufferedAhead || 0));
+
+  els.developerJobMetric.textContent = job?.id || '—';
+  els.developerStateMetric.textContent = job?.status || (state.liveManim.active ? 'playing' : 'idle');
+  els.developerProgressMetric.textContent = `${Number(job?.progress || 0)} / ${Number(job?.total || 0)}`;
+  els.developerBufferMetric.textContent = `${bufferSeconds.toFixed(1)} sn`;
+  els.developerConsoleStatus.textContent = job
+    ? `${job.current || job.message || job.status} · ${new Date().toLocaleTimeString('tr-TR')}`
+    : 'Canlı olay bekleniyor';
+
+  const eventLines = state.developer.events.slice().reverse().map((event) => {
+    const timestamp = new Date(event.at).toLocaleTimeString('tr-TR', { hour12: false });
+    const details = event.details ? ` ${JSON.stringify(event.details)}` : '';
+    return `[${timestamp}] ${event.type.toUpperCase()}  ${event.message}${details}`;
+  });
+  const snapshot = job ? {
+    job: {
+      id: job.id,
+      status: job.status,
+      progress: job.progress,
+      total: job.total,
+      current: job.current,
+      message: job.message,
+      error: job.error,
+      updatedAt: job.updatedAt
+    },
+    generated: {
+      plan: job.plan || state.plan,
+      segments: job.segments || []
+    },
+    progressive: {
+      ...(job.progressive || {}),
+      bufferedAheadSeconds: bufferSeconds,
+      manifestPartials: manifest?.partials?.map((partial) => ({
+        sequence: partial.sequence,
+        startSeconds: partial.startSeconds,
+        durationSeconds: partial.durationSeconds
+      })) || []
+    },
+    playback: {
+      mode: state.liveManim.active ? 'progressive' : (state.playback.active ? 'segments' : 'idle'),
+      currentSegmentIndex: state.playback.currentIndex,
+      playableSegments: state.playback.playable.length,
+      waitingForNext: state.playback.waitingForNext,
+      currentSeconds: state.liveManim.active
+        ? Number(els.liveManimVideo.currentTime || 0)
+        : currentGlobalTime(),
+      readySeconds
+    },
+    timings: job.timings || null
+  } : null;
+
+  els.logOutput.textContent = [
+    'LIVE EVENTS',
+    eventLines.join('\n') || 'Henüz üretim olayı yok.',
+    ...(snapshot ? ['', 'CURRENT SNAPSHOT', JSON.stringify(snapshot, null, 2)] : [])
+  ].join('\n');
 }
 
 function renderMathMarkdown(value) {
@@ -1157,27 +1292,77 @@ function currentGlobalTime() {
   return elapsedBeforeSegment(state.playback.currentIndex) + (els.videoOutput.currentTime || 0);
 }
 
+function liveTimelineDuration() {
+  const manifestDuration = Number(state.developer.lastManifest?.readyDurationSeconds || 0);
+  const jobDuration = Number(state.developer.lastJob?.progressive?.readyDurationSeconds || 0);
+  const mediaDuration = Number.isFinite(els.liveManimVideo.duration)
+    ? Number(els.liveManimVideo.duration)
+    : 0;
+  return Math.max(manifestDuration, jobDuration, mediaDuration);
+}
+
+function renderTimelineSegments(duration, liveVideoActive) {
+  if (!duration) {
+    els.timelineSegments.replaceChildren();
+    return;
+  }
+  const boundaries = [];
+  if (liveVideoActive) {
+    let cursor = 0;
+    for (const partial of state.developer.lastManifest?.partials || []) {
+      cursor += Number(partial.durationSeconds || 0);
+      if (cursor > 0 && cursor < duration) boundaries.push(cursor);
+    }
+  } else if (state.playback.active) {
+    let cursor = 0;
+    state.playback.playable.slice(0, -1).forEach((segment, index) => {
+      cursor += segmentDuration(segment, index);
+      if (cursor > 0 && cursor < duration) boundaries.push(cursor);
+    });
+  }
+  els.timelineSegments.replaceChildren(...boundaries.map((boundary) => {
+    const marker = document.createElement('span');
+    marker.className = 'timelineSegmentMarker';
+    marker.style.left = `${Math.min(100, (boundary / duration) * 100)}%`;
+    return marker;
+  }));
+}
+
 function updatePlayerControls() {
+  const liveVideoActive = state.liveManim.active && els.liveManimVideo.classList.contains('visible');
   const standaloneVideo = !state.playback.active && els.videoOutput.classList.contains('visible');
-  const duration = standaloneVideo && Number.isFinite(els.videoOutput.duration)
-    ? els.videoOutput.duration
-    : availableDuration();
-  const current = standaloneVideo
-    ? (els.videoOutput.currentTime || 0)
-    : Math.min(currentGlobalTime(), duration);
-  els.playerControls.classList.toggle('hidden', !state.playback.active && !els.videoOutput.classList.contains('visible'));
+  const duration = liveVideoActive
+    ? liveTimelineDuration()
+    : (standaloneVideo && Number.isFinite(els.videoOutput.duration)
+      ? els.videoOutput.duration
+      : availableDuration());
+  const current = liveVideoActive
+    ? Math.min(Number(els.liveManimVideo.currentTime || 0), duration)
+    : (standaloneVideo
+      ? (els.videoOutput.currentTime || 0)
+      : Math.min(currentGlobalTime(), duration));
+  const activeVideo = liveVideoActive ? els.liveManimVideo : els.videoOutput;
+  els.playerControls.classList.toggle(
+    'hidden',
+    !liveVideoActive && !state.playback.active && !els.videoOutput.classList.contains('visible')
+  );
   els.seekBar.max = String(Math.max(0, duration));
   els.seekBar.value = String(Math.max(0, current));
   els.currentTimeText.textContent = formatTime(current);
   els.durationText.textContent = formatTime(duration);
-  els.playPauseBtn.textContent = els.videoOutput.paused ? 'Oynat' : 'II';
-  els.playPauseBtn.setAttribute('aria-label', els.videoOutput.paused ? 'Oynat' : 'Duraklat');
+  els.playPauseBtn.textContent = activeVideo.paused ? 'Oynat' : 'II';
+  els.playPauseBtn.setAttribute('aria-label', activeVideo.paused ? 'Oynat' : 'Duraklat');
+  renderTimelineSegments(duration, liveVideoActive);
   updateKaraAskVisibility();
   updateKaraTimestamp();
 }
 
 function shouldShowPlayerControls() {
-  return state.playback.active || els.videoOutput.classList.contains('visible');
+  return (
+    (state.liveManim.active && els.liveManimVideo.classList.contains('visible'))
+    || state.playback.active
+    || els.videoOutput.classList.contains('visible')
+  );
 }
 
 function showPlayerControlsTemporarily() {
@@ -1211,6 +1396,15 @@ function hidePlayerControlsSoon() {
 }
 
 function togglePlayback() {
+  if (state.liveManim.active && els.liveManimVideo.classList.contains('visible')) {
+    if (els.liveManimVideo.paused) {
+      els.liveManimVideo.play().catch(() => {});
+    } else {
+      els.liveManimVideo.pause();
+    }
+    updatePlayerControls();
+    return;
+  }
   if (!state.playback.active && state.playback.playable.length) {
     state.playback.userPaused = false;
     playSegmentAt(0);
@@ -1271,6 +1465,7 @@ function resetLiveManimStream() {
     streamUrl: null,
     manifestLoading: false,
     manifestPromise: null,
+    manifestDirty: false,
     introDurationSeconds: 0,
     handoffSeconds: 0,
     lastPlaybackSeconds: 0
@@ -1279,6 +1474,11 @@ function resetLiveManimStream() {
 }
 
 function seekToGlobalTime(seconds) {
+  if (state.liveManim.active && els.liveManimVideo.classList.contains('visible')) {
+    els.liveManimVideo.currentTime = Math.max(0, Math.min(Number(seconds) || 0, liveTimelineDuration()));
+    updatePlayerControls();
+    return;
+  }
   if (!state.playback.active && els.videoOutput.classList.contains('visible')) {
     els.videoOutput.currentTime = Math.max(0, Math.min(Number(seconds) || 0, els.videoOutput.duration || 0));
     updatePlayerControls();
@@ -1325,9 +1525,11 @@ function resetProgressivePlayback() {
   els.seekBar.max = '0';
   els.currentTimeText.textContent = '0:00';
   els.durationText.textContent = '0:00';
+  els.timelineSegments.replaceChildren();
   setDownloadVideo(null);
   setVideoOverlay('', false);
   updateKaraAskVisibility();
+  resetDeveloperConsole();
 }
 
 function absoluteVideoUrl(videoUrl) {
@@ -1715,10 +1917,6 @@ function applyFullVideoJobUpdate(job) {
     renderSegments();
     renderSegmentDetail();
   }
-  const segmentLines = (job.segments || [])
-    .map((segment) => `${segment.id}: ${segment.status}${segment.videoUrl ? ` -> ${segment.videoUrl}` : ''}`)
-    .join('\n');
-
   updateStreamingPreparation(job);
   updateLiveManimFromJob(job);
   updatePlayableSegments(job);
@@ -1731,16 +1929,14 @@ function applyFullVideoJobUpdate(job) {
   els.liveStreamText.textContent = job.progressive?.enabled
     ? liveProductionText(job)
     : `${job.progress}/${job.total} bölüm hazır${job.current ? ` · ${job.current}` : ''}`;
-  els.logOutput.textContent = [
-    `Job: ${job.id}`,
-    `Durum: ${job.status}`,
-    `Ilerleme: ${job.progress}/${job.total}`,
-    `Mesaj: ${job.message || ''}`,
-    `Anlik: ${job.current || ''}`,
-    `Video kaynağı: ${job.result?.source || 'canlı üretim'}`,
-    '',
-    segmentLines
-  ].join('\n');
+  state.developer.lastJob = job;
+  appendDeveloperEvent('job', job.current || job.message || job.status, {
+    status: job.status,
+    progress: job.progress,
+    total: job.total,
+    progressiveStatus: job.progressive?.status || 'disabled',
+    readyCount: Number(job.progressive?.readyCount || 0)
+  });
   setStatus(job.progressive?.readyCount
     ? `${Math.floor(job.progressive.readyDurationSeconds || 0)} saniye hazır | ${job.current || job.status}`
     : streamingPreparationMessage(job));
@@ -1787,7 +1983,11 @@ function syncProgressiveManifest(job) {
     state.liveManim.jobId !== job.id
     || !state.liveManim.streamUrl
   ) return Promise.resolve();
-  if (state.liveManim.manifestPromise) return state.liveManim.manifestPromise;
+  if (state.liveManim.manifestPromise) {
+    state.liveManim.manifestDirty = true;
+    return state.liveManim.manifestPromise;
+  }
+  state.liveManim.manifestDirty = false;
   state.liveManim.manifestLoading = true;
   const manifestPromise = (async () => {
     const response = await fetch(apiUrl(state.liveManim.streamUrl), {
@@ -1803,6 +2003,18 @@ function syncProgressiveManifest(job) {
       ...partial,
       url: apiUrl(partial.url)
     }));
+    const previousPartialCount = state.developer.lastManifest?.partials?.length || 0;
+    state.developer.lastManifest = manifest;
+    if (manifest.partials.length !== previousPartialCount) {
+      appendDeveloperEvent('manifest', 'Canlı manifest güncellendi.', {
+        partials: manifest.partials.length,
+        readyDurationSeconds: manifest.readyDurationSeconds,
+        complete: manifest.complete
+      });
+    } else {
+      renderDeveloperConsole();
+    }
+    updatePlayerControls();
     await progressiveManimPlayer.sync(manifest);
   })().catch((error) => {
     failLiveManimPlayback(error);
@@ -1810,6 +2022,10 @@ function syncProgressiveManifest(job) {
     state.liveManim.manifestLoading = false;
     if (state.liveManim.manifestPromise === manifestPromise) {
       state.liveManim.manifestPromise = null;
+      if (state.liveManim.manifestDirty && state.liveManim.jobId === job.id) {
+        state.liveManim.manifestDirty = false;
+        queueMicrotask(() => void syncProgressiveManifest(job));
+      }
     }
   });
   state.liveManim.manifestPromise = manifestPromise;
@@ -1888,7 +2104,9 @@ async function waitForFullVideoJob(jobId) {
     return await streamFullVideoJob(jobId);
   } catch (error) {
     if (error.jobFailed) throw error;
-    els.logOutput.textContent += `\nCanlı bağlantı kesildi; durum sorgulamasına geçildi: ${error.message}`;
+    appendDeveloperEvent('network', 'Canlı bağlantı kesildi; durum sorgulamasına geçildi.', {
+      message: error.message
+    });
     return pollFullVideoJob(jobId);
   }
 }
@@ -2014,6 +2232,7 @@ els.liveManimVideo.addEventListener('timeupdate', () => {
   if (Number.isFinite(currentTime) && currentTime > state.liveManim.lastPlaybackSeconds) {
     state.liveManim.lastPlaybackSeconds = currentTime;
   }
+  updatePlayerControls();
 });
 els.liveManimVideo.addEventListener('ended', () => {
   if (state.liveManim.failed || state.liveManim.browserFailed) {
@@ -2029,6 +2248,7 @@ els.liveManimVideo.addEventListener('ended', () => {
     false
   );
   updateKaraAskVisibility();
+  updatePlayerControls();
 });
 els.liveManimVideo.addEventListener('error', () => {
   if (!els.liveManimVideo.getAttribute('src')) return;
@@ -2040,7 +2260,11 @@ els.liveManimVideo.addEventListener('click', () => {
   } else {
     els.liveManimVideo.pause();
   }
+  updatePlayerControls();
 });
+els.liveManimVideo.addEventListener('play', updatePlayerControls);
+els.liveManimVideo.addEventListener('pause', updatePlayerControls);
+els.liveManimVideo.addEventListener('durationchange', updatePlayerControls);
 
 document.querySelector('.videoShell').addEventListener('mousemove', showPlayerControlsTemporarily);
 document.querySelector('.videoShell').addEventListener('mouseleave', hidePlayerControlsSoon);

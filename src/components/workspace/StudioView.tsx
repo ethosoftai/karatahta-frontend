@@ -44,7 +44,10 @@ export function StudioView() {
           <div id="playerControls" className="playerControls hidden">
             <button id="playPauseBtn" className="playerButton" type="button" aria-label="Oynat">Oynat</button>
             <span id="currentTimeText" className="timeText">0:00</span>
-            <input id="seekBar" className="seekBar" type="range" min="0" max="0" step="0.1" defaultValue="0" aria-label="Video ilerleme" />
+            <div className="timelineTrack">
+              <input id="seekBar" className="seekBar" type="range" min="0" max="0" step="0.1" defaultValue="0" aria-label="Video ilerleme" />
+              <div id="timelineSegments" className="timelineSegments" aria-hidden="true" />
+            </div>
             <span id="durationText" className="timeText">0:00</span>
             <button id="fullscreenBtn" className="playerIconButton" type="button" aria-label="Tam ekran">⛶</button>
           </div>
@@ -65,7 +68,19 @@ export function StudioView() {
           <span id="renderMeta">Hazırlanıyor</span>
           <span id="planMeta" />
         </div>
-        <pre id="logOutput" className="hidden" />
+        <details id="developerConsole" className="developerConsole" open>
+          <summary>
+            <span className="developerConsoleTitle"><span className="developerLiveDot" aria-hidden="true" />Geliştirici konsolu</span>
+            <span id="developerConsoleStatus" className="developerConsoleStatus">Hazır</span>
+          </summary>
+          <div className="developerMetrics" aria-live="polite">
+            <span><small>JOB</small><strong id="developerJobMetric">—</strong></span>
+            <span><small>DURUM</small><strong id="developerStateMetric">idle</strong></span>
+            <span><small>ÜRETİLEN</small><strong id="developerProgressMetric">0 / 0</strong></span>
+            <span><small>TAMPON</small><strong id="developerBufferMetric">0 sn</strong></span>
+          </div>
+          <pre id="logOutput">Canlı üretim olayları burada görünecek.</pre>
+        </details>
       </section>
 
       <section className="lessonGrid hidden">
