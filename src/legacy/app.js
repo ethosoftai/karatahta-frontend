@@ -370,6 +370,13 @@ function updateStreamingPreparation(job) {
   els.preparingMessage.textContent = streamingPreparationMessage(job);
   els.preparingBar.style.width = `${Math.min(100, preparingProgress)}%`;
 
+  // Job updates continue while the remaining segments render. Once either
+  // player is visible, never let those background updates cover playback.
+  if (hasVisibleVideo()) {
+    els.preparingPanel.classList.add('hidden');
+    return;
+  }
+
   if (!playbackReady && job.status !== 'failed' && job.status !== 'done') {
     els.preparingPanel.classList.remove('hidden');
   }
@@ -1984,7 +1991,9 @@ function updateLiveManimFromJob(job) {
     progressiveManimPlayer.start({
       jobId: job.id,
       lessonId: job.lessonId || state.lessonId,
-      bufferTargetSeconds: progressive.bufferTargetSeconds
+      // Keep a client-side safety floor for jobs created with an older or
+      // incomplete backend configuration.
+      bufferTargetSeconds: Math.max(18, Number(progressive.bufferTargetSeconds || 0))
     });
   }
   state.liveManim.active = true;
@@ -2222,6 +2231,7 @@ els.videoOutput.addEventListener('playing', () => setVideoLoading(false));
 els.videoOutput.addEventListener('error', () => setVideoLoading(false));
 els.videoOutput.addEventListener('play', () => {
   state.playback.userPaused = false;
+  stopPreparingProgress({ complete: true });
   els.liveStreamBadge.classList.add('hidden');
   setVideoOverlay('', false);
   updatePlayerControls();
@@ -2244,6 +2254,7 @@ els.liveManimVideo.addEventListener('waiting', () => {
 });
 els.liveManimVideo.addEventListener('canplay', () => setVideoLoading(false));
 els.liveManimVideo.addEventListener('playing', () => {
+  stopPreparingProgress({ complete: true });
   els.liveStreamBadge.classList.add('hidden');
   setVideoLoading(false);
   setVideoOverlay('', false);
