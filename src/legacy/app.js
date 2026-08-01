@@ -200,6 +200,7 @@ const progressiveManimPlayer = new ProgressiveManimPlayer(els.liveManimVideo, {
     setGenerationStage(els.stagePlayback, 'done');
     stopPreparingProgress({ complete: true });
     els.liveManimVideo.classList.add('visible');
+    els.liveStreamBadge.classList.add('hidden');
     setVideoLoading(false);
     setVideoOverlay('', false);
     appendDeveloperEvent('playback', 'Canlı oynatma için yeterli tampon hazır.');
@@ -239,7 +240,19 @@ function setWorkspaceLoading(loading, title = 'Ders yükleniyor', message = 'Vid
   els.workspaceLoading.setAttribute('aria-hidden', String(!loading));
 }
 
+function hasVisibleVideo() {
+  return (
+    els.liveManimVideo.classList.contains('visible')
+    || els.videoOutput.classList.contains('visible')
+  );
+}
+
 function setVideoLoading(loading, message = 'Video yükleniyor...') {
+  if (loading && hasVisibleVideo()) {
+    els.videoLoadingPanel.classList.add('hidden');
+    els.videoLoadingPanel.setAttribute('aria-hidden', 'true');
+    return;
+  }
   els.videoLoadingText.textContent = message;
   els.videoLoadingPanel.classList.toggle('hidden', !loading);
   els.videoLoadingPanel.setAttribute('aria-hidden', String(!loading));
@@ -966,6 +979,10 @@ function setBusy(button, busy, text) {
 }
 
 function setVideoOverlay(message, visible = true) {
+  if (visible && hasVisibleVideo()) {
+    els.videoOverlay.classList.remove('visible');
+    return;
+  }
   els.videoOverlay.textContent = message;
   els.videoOverlay.classList.toggle('visible', visible);
 }
@@ -1924,7 +1941,9 @@ function applyFullVideoJobUpdate(job) {
   const liveManimRunning = state.liveManim.active && !els.liveManimVideo.ended;
   els.liveStreamBadge.classList.toggle(
     'hidden',
-    job.status === 'failed' || (job.status === 'done' && !liveManimRunning)
+    hasVisibleVideo()
+      || job.status === 'failed'
+      || (job.status === 'done' && !liveManimRunning)
   );
   els.liveStreamText.textContent = job.progressive?.enabled
     ? liveProductionText(job)
@@ -2203,6 +2222,8 @@ els.videoOutput.addEventListener('playing', () => setVideoLoading(false));
 els.videoOutput.addEventListener('error', () => setVideoLoading(false));
 els.videoOutput.addEventListener('play', () => {
   state.playback.userPaused = false;
+  els.liveStreamBadge.classList.add('hidden');
+  setVideoOverlay('', false);
   updatePlayerControls();
   showPlayerControlsTemporarily();
 });
@@ -2223,6 +2244,7 @@ els.liveManimVideo.addEventListener('waiting', () => {
 });
 els.liveManimVideo.addEventListener('canplay', () => setVideoLoading(false));
 els.liveManimVideo.addEventListener('playing', () => {
+  els.liveStreamBadge.classList.add('hidden');
   setVideoLoading(false);
   setVideoOverlay('', false);
   updateKaraAskVisibility();
