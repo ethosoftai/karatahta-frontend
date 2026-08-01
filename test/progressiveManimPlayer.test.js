@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  contiguousBufferedAhead,
   hasPlaybackBuffer,
   manifestBelongsTo,
   orderedNewPartials,
@@ -58,4 +59,24 @@ test('fMP4 init ve media kutularini append kuyrugu icin ayirir', () => {
 test('oynatma 6 saniyelik gercek buffer dolmadan baslamaz', () => {
   assert.equal(hasPlaybackBuffer(5.99, 6), false);
   assert.equal(hasPlaybackBuffer(6, 6), true);
+});
+
+test('tampon hesabi zaman cizelgesindeki boslugu gecmez', () => {
+  const ranges = {
+    length: 2,
+    start: (index) => [0, 20][index],
+    end: (index) => [8, 40][index]
+  };
+  assert.equal(contiguousBufferedAhead(ranges, 3), 5);
+  assert.equal(contiguousBufferedAhead(ranges, 10), 0);
+  assert.equal(contiguousBufferedAhead(ranges, 22), 18);
+});
+
+test('kucuk kare yuvarlama bosluklarini tek kesintisiz tampon sayar', () => {
+  const ranges = {
+    length: 2,
+    start: (index) => [0, 6.05][index],
+    end: (index) => [6, 12][index]
+  };
+  assert.equal(contiguousBufferedAhead(ranges, 1), 11);
 });

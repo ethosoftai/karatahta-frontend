@@ -84,6 +84,28 @@ export function hasPlaybackBuffer(bufferedSeconds, targetSeconds) {
   return Number(bufferedSeconds || 0) >= Math.max(2, Number(targetSeconds || 6));
 }
 
+export function contiguousBufferedAhead(buffered, currentTime = 0, toleranceSeconds = 0.12) {
+  if (!buffered?.length) return 0;
+  const cursor = Math.max(0, Number(currentTime || 0));
+  const tolerance = Math.max(0, Number(toleranceSeconds || 0));
+  let contiguousEnd = null;
+
+  for (let index = 0; index < buffered.length; index += 1) {
+    const start = Number(buffered.start(index));
+    const end = Number(buffered.end(index));
+    if (!Number.isFinite(start) || !Number.isFinite(end)) continue;
+    if (contiguousEnd === null) {
+      if (cursor < start - tolerance || cursor > end + tolerance) continue;
+      contiguousEnd = end;
+      continue;
+    }
+    if (start > contiguousEnd + tolerance) break;
+    contiguousEnd = Math.max(contiguousEnd, end);
+  }
+
+  return contiguousEnd === null ? 0 : Math.max(0, contiguousEnd - cursor);
+}
+
 export class ProgressiveManimPlayer {
   constructor(video, {
     getHeaders = () => ({}),
@@ -177,7 +199,11 @@ export class ProgressiveManimPlayer {
     });
     if (generation !== this.generation) return;
     this.sourceBuffer = this.mediaSource.addSourceBuffer(mimeType);
-    this.sourceBuffer.mode = 'segments';
+    // Every Manim checkpoint is an independent fMP4 whose timestamps begin
+    // at zero. Sequence mode lets MSE place them exactly after one another;
+    // rounded metadata offsets in segments mode can leave playback-stalling
+    // gaps between otherwise ready fragments.
+    this.sourceBuffer.mode = 'sequence';
   }
 
   async appendBuffer(data, timestampOffset, generation, retry = true) {
@@ -242,12 +268,12 @@ export class ProgressiveManimPlayer {
       await this.appendBuffer(init, Number.NaN, generation);
       this.initAppended = true;
     }
-    await this.appendBuffer(media, Number(partial.startSeconds || 0), generation);
+    await this.appendBuffer(media, Number.NaN, generation);
     this.appendedSequences.add(partial.sequence);
     this.queuedSequences.delete(partial.sequence);
     this.nextSequence += 1;
     this.onPartial?.(partial, this.bufferedAhead());
-    if (!this.playbackStarted && hasPlaybackBuffer(this.totalBuffered(), this.bufferTargetSeconds)) {
+    if (!this.playbackStarted && hasPlaybackBuffer(this.bufferedAhead(), this.bufferTargetSeconds)) {
       this.playbackStarted = true;
       this.onPlaybackReady?.();
       this.video.play().catch(() => {});
@@ -260,7 +286,7 @@ export class ProgressiveManimPlayer {
   }
 
   bufferedAhead() {
-    return Math.max(0, this.totalBuffered() - Number(this.video.currentTime || 0));
+    return contiguousBufferedAhead(this.video.buffered, Number(this.video.currentTime || 0));
   }
 
   markBuffering() {
