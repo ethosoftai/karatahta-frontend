@@ -152,7 +152,7 @@ git diff --check
 bulunan `dist/` içeriğini şu yayın dizinine kopyalar:
 
 ```text
-/home/ethosoft/karatahta.ethosoft.org/
+$HOME/karatahta.ethosoft.org/
 ```
 
 Bu nedenle kaynak dosyalar ile `dist/` aynı committe güncel olmalıdır:

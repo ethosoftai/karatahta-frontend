@@ -1,9 +1,11 @@
 ---
 deployment:
   tasks:
-    - export DEPLOYPATH=/home/ethosoft/karatahta.ethosoft.org/
+    - export DEPLOYPATH=$HOME/karatahta.ethosoft.org/
     - /bin/mkdir -p "$DEPLOYPATH"
-    - /bin/cp -R -f dist/. "$DEPLOYPATH"
+    - /bin/cp -f dist/index.html dist/.htaccess dist/logo.png "$DEPLOYPATH"
+    - /bin/cp -R -f dist/assets "$DEPLOYPATH"
     - /bin/chmod 755 "$DEPLOYPATH"
-    - /usr/bin/find "$DEPLOYPATH" -type d -exec /bin/chmod 755 {} \;
-    - /usr/bin/find "$DEPLOYPATH" -type f -exec /bin/chmod 644 {} \;
+    - /bin/chmod 644 "$DEPLOYPATH/index.html" "$DEPLOYPATH/.htaccess" "$DEPLOYPATH/logo.png"
+    - /usr/bin/find "$DEPLOYPATH/assets" -type d -exec /bin/chmod 755 {} \;
+    - /usr/bin/find "$DEPLOYPATH/assets" -type f -exec /bin/chmod 644 {} \;
