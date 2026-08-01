@@ -10,6 +10,12 @@ function apiUrl(path) {
   return `${API_BASE_URL}${path.startsWith('/') ? path : `/${path}`}`;
 }
 
+function cacheBustUrl(url) {
+  if (!url) return url;
+  const separator = String(url).includes('?') ? '&' : '?';
+  return `${url}${separator}t=${Date.now()}`;
+}
+
 const state = {
   auth: {
     session: null,
@@ -59,6 +65,7 @@ let controlsHideTimer = null;
 let preparingTimer = null;
 let preparingProgress = 0;
 let lessonLoadVersion = 0;
+let authRefreshPromise = null;
 
 const preparingMessages = [
   'Ders akışı kuruluyor...',
@@ -189,6 +196,7 @@ function failLiveManimPlayback(error) {
 }
 
 const progressiveManimPlayer = new ProgressiveManimPlayer(els.liveManimVideo, {
+  fetcher: authorizedFetch,
   getHeaders: authHeaders,
   onConnected: () => {
     setVideoLoading(true, 'İlk segment alındı; gerçek Manim parçaları hazırlanıyor...');
@@ -428,6 +436,52 @@ function authHeaders() {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
+async function refreshAccessToken() {
+  if (authRefreshPromise) return authRefreshPromise;
+  const refreshToken = state.auth.session?.refresh_token;
+  if (!refreshToken) throw new Error('Oturum yenileme anahtari bulunamadi.');
+  authRefreshPromise = authApi('/api/auth/refresh', { refresh_token: refreshToken })
+    .then((refreshed) => {
+      if (!refreshed.session?.access_token) {
+        throw new Error('Sunucu yenilenmis oturum dondurmedi.');
+      }
+      saveAuthSession(refreshed.session, refreshed.profile || state.auth.profile);
+      return refreshed.session;
+    })
+    .catch((error) => {
+      saveAuthSession(null);
+      showAuth('Oturum suresi doldu. Lutfen tekrar giris yap.', true);
+      throw error;
+    })
+    .finally(() => {
+      authRefreshPromise = null;
+    });
+  return authRefreshPromise;
+}
+
+async function authorizedFetch(url, options = {}, retry = true) {
+  const expiresAt = Number(state.auth.session?.expires_at || 0);
+  if (
+    state.auth.session?.refresh_token
+    && expiresAt
+    && expiresAt <= Math.floor(Date.now() / 1000) + 45
+  ) {
+    await refreshAccessToken();
+  }
+  const response = await fetch(url, {
+    ...options,
+    headers: {
+      ...(options.headers || {}),
+      ...authHeaders()
+    }
+  });
+  if (response.status === 401 && retry && state.auth.session?.refresh_token) {
+    await refreshAccessToken();
+    return authorizedFetch(url, options, false);
+  }
+  return response;
+}
+
 function saveAuthSession(session, profile = null) {
   state.auth.session = session || null;
   state.auth.profile = profile || null;
@@ -611,7 +665,8 @@ async function refreshLessonHistory() {
 }
 
 function localVideoUrl(relativePath) {
-  return relativePath ? apiUrl(`/renders/${relativePath}`) : null;
+  void relativePath;
+  return null;
 }
 
 async function lessonVideoUrl(lessonId, video, signedVideoUrl = null) {
@@ -742,9 +797,7 @@ async function authApi(path, payload = null, options = {}) {
 }
 
 async function apiGet(path) {
-  const response = await fetch(apiUrl(path), {
-    headers: authHeaders()
-  });
+  const response = await authorizedFetch(apiUrl(path));
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
     if (response.status === 401) {
@@ -757,9 +810,9 @@ async function apiGet(path) {
 }
 
 async function api(path, payload) {
-  const response = await fetch(apiUrl(path), {
+  const response = await authorizedFetch(apiUrl(path), {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload)
   });
 
@@ -914,7 +967,7 @@ function renderSpeech() {
       </div>
     </div>
   `;
-  els.audioOutput.src = `${speechState.audioUrl}?t=${Date.now()}`;
+  els.audioOutput.src = cacheBustUrl(speechState.audioUrl);
   els.audioOutput.classList.add('visible');
 }
 
@@ -935,6 +988,17 @@ async function monitorFullLessonJob(job) {
     state.playback.finalVideoUrl = finalJob.result.videoUrl;
     setDownloadVideo(finalJob.result.videoUrl);
     maybeStartOrContinuePlayback();
+    if (
+      finalJob.result.videoUrl
+      && !state.liveManim.active
+      && !state.playback.playable.length
+    ) {
+      els.videoOutput.src = absoluteVideoUrl(finalJob.result.videoUrl);
+      els.videoOutput.classList.add('visible');
+      els.videoOutput.load();
+      els.videoOutput.play().catch(() => {});
+      setVideoOverlay('', false);
+    }
     refreshLessonHistory().catch(() => {});
     setStatus(canonicalLive
       ? 'İzlediğin canlı ders aynı görüntüyle kaydedildi.'
@@ -1903,9 +1967,7 @@ els.generateFullBtn.addEventListener('click', startFullLessonGeneration);
 
 async function pollFullVideoJob(jobId) {
   while (true) {
-    const response = await fetch(apiUrl(`/api/jobs/${jobId}`), {
-      headers: authHeaders()
-    });
+    const response = await authorizedFetch(apiUrl(`/api/jobs/${jobId}`));
     const job = await response.json();
     if (!response.ok) {
       throw new Error(job.error || 'Job durumu okunamadi.');
@@ -1980,6 +2042,15 @@ function updateLiveManimFromJob(job) {
   if (state.liveManim.failed) {
     // Do not reset the MediaSource here: doing so zeroes currentTime before
     // the stream reader/ended event can capture the handoff position.
+    if (state.liveManim.active && Number(progressive?.readyCount || 0) > 0) {
+      // The failed manifest is marked complete by the backend. Sync it once so
+      // MediaSource.endOfStream() fires instead of leaving the last frame frozen.
+      void syncProgressiveManifest(job);
+    }
+    if (Number(progressive?.readyCount || 0) === 0) {
+      state.liveManim.active = false;
+      els.liveManimVideo.classList.remove('visible');
+    }
     if (!state.liveManim.active) maybeStartOrContinuePlayback();
     return;
   }
@@ -2016,9 +2087,8 @@ function syncProgressiveManifest(job) {
   state.liveManim.manifestDirty = false;
   state.liveManim.manifestLoading = true;
   const manifestPromise = (async () => {
-    const response = await fetch(apiUrl(state.liveManim.streamUrl), {
+    const response = await authorizedFetch(apiUrl(state.liveManim.streamUrl), {
       cache: 'no-store',
-      headers: authHeaders()
     });
     const manifest = await response.json();
     if (!response.ok) {
@@ -2059,11 +2129,10 @@ function syncProgressiveManifest(job) {
 }
 
 async function streamFullVideoJob(jobId, { afterEventId = 0, reconnectAttempt = 0 } = {}) {
-  const response = await fetch(apiUrl(`/api/jobs/${jobId}/events`), {
+  const response = await authorizedFetch(apiUrl(`/api/jobs/${jobId}/events`), {
     headers: {
       Accept: 'text/event-stream',
-      ...(afterEventId ? { 'Last-Event-ID': String(afterEventId) } : {}),
-      ...authHeaders()
+      ...(afterEventId ? { 'Last-Event-ID': String(afterEventId) } : {})
     }
   });
   if (!response.ok || !response.body) {
@@ -2162,7 +2231,7 @@ els.renderBtn.addEventListener('click', async () => {
       audioRelativePath: speechState?.audioRelativePath || null
     });
     stopPreparingProgress({ complete: true });
-    els.videoOutput.src = `${data.videoUrl}?t=${Date.now()}`;
+    els.videoOutput.src = cacheBustUrl(data.videoUrl);
     els.videoOutput.classList.add('visible');
     showPlayerControlsTemporarily();
     state.playback.active = false;

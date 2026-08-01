@@ -126,6 +126,7 @@ export function contiguousBufferedAhead(buffered, currentTime = 0, toleranceSeco
 export class ProgressiveManimPlayer {
   constructor(video, {
     getHeaders = () => ({}),
+    fetcher = fetch,
     onConnected,
     onPlaybackReady,
     onPartial,
@@ -135,6 +136,7 @@ export class ProgressiveManimPlayer {
   } = {}) {
     this.video = video;
     this.getHeaders = getHeaders;
+    this.fetcher = fetcher;
     this.onConnected = onConnected;
     this.onPlaybackReady = onPlaybackReady;
     this.onPartial = onPartial;
@@ -271,7 +273,7 @@ export class ProgressiveManimPlayer {
   async appendPartial(partial, generation) {
     if (generation !== this.generation || this.appendedSequences.has(partial.sequence)) return;
     if (partial.sequence !== this.nextSequence) return;
-    const response = await fetch(partial.url, {
+    const response = await this.fetcher(partial.url, {
       cache: 'no-store',
       headers: this.getHeaders(),
       signal: this.abortController.signal
