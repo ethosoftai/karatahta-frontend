@@ -341,7 +341,7 @@ function updateStreamingPreparation(job) {
   const total = Math.max(planCount, Number(job.total || 0), 1);
   const readyCount = Number(job.progressive?.readyCount || 0);
   const readySeconds = Number(job.progressive?.readyDurationSeconds || 0);
-  const bufferTarget = Math.max(1, Number(job.progressive?.bufferTargetSeconds || 12));
+  const bufferTarget = Math.max(0.001, Number(job.progressive?.bufferTargetSeconds ?? 0));
   const playbackReady = Boolean(job.progressive?.playbackReadyAt)
     || job.progressive?.status === 'ready'
     || job.progressive?.status === 'done';
@@ -1991,9 +1991,7 @@ function updateLiveManimFromJob(job) {
     progressiveManimPlayer.start({
       jobId: job.id,
       lessonId: job.lessonId || state.lessonId,
-      // Keep a client-side safety floor for jobs created with an older or
-      // incomplete backend configuration.
-      bufferTargetSeconds: Math.max(18, Number(progressive.bufferTargetSeconds || 0))
+      bufferTargetSeconds: Math.max(0, Number(progressive.bufferTargetSeconds || 0))
     });
   }
   state.liveManim.active = true;

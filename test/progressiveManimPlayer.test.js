@@ -56,7 +56,9 @@ test('fMP4 init ve media kutularini append kuyrugu icin ayirir', () => {
   assert.throws(() => splitFragmentedMp4(input.slice(0, -1)), /Eksik|gecersiz/);
 });
 
-test('oynatma 6 saniyelik gercek buffer dolmadan baslamaz', () => {
+test('tampon kapaliyken ilk gercek medya verisi oynatmayi baslatir', () => {
+  assert.equal(hasPlaybackBuffer(0, 0), false);
+  assert.equal(hasPlaybackBuffer(0.01, 0), true);
   assert.equal(hasPlaybackBuffer(5.99, 6), false);
   assert.equal(hasPlaybackBuffer(6, 6), true);
 });

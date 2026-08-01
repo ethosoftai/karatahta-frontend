@@ -81,7 +81,8 @@ export function manifestBelongsTo(manifest, jobId, lessonId) {
 }
 
 export function hasPlaybackBuffer(bufferedSeconds, targetSeconds) {
-  return Number(bufferedSeconds || 0) >= Math.max(2, Number(targetSeconds || 6));
+  const availableSeconds = Number(bufferedSeconds || 0);
+  return availableSeconds > 0 && availableSeconds >= Math.max(0, Number(targetSeconds || 0));
 }
 
 export function contiguousBufferedAhead(buffered, currentTime = 0, toleranceSeconds = 0.12) {
@@ -140,17 +141,17 @@ export class ProgressiveManimPlayer {
     this.nextSequence = 0;
     this.initAppended = false;
     this.playbackStarted = false;
-    this.bufferTargetSeconds = 6;
+    this.bufferTargetSeconds = 0;
     this.pending = Promise.resolve();
     this.complete = false;
   }
 
-  start({ jobId, lessonId, bufferTargetSeconds = 6 }) {
+  start({ jobId, lessonId, bufferTargetSeconds = 0 }) {
     this.stop();
     this.generation += 1;
     this.jobId = String(jobId);
     this.lessonId = String(lessonId);
-    this.bufferTargetSeconds = Math.max(2, Number(bufferTargetSeconds || 6));
+    this.bufferTargetSeconds = Math.max(0, Number(bufferTargetSeconds || 0));
     this.abortController = new AbortController();
     this.onConnected?.();
   }
