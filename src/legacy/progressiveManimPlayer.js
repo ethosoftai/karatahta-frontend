@@ -85,6 +85,15 @@ export function hasPlaybackBuffer(bufferedSeconds, targetSeconds) {
   return availableSeconds > 0 && availableSeconds >= Math.max(0, Number(targetSeconds || 0));
 }
 
+export function partialTimeline(partial) {
+  const startSeconds = Math.max(0, Number(partial?.startSeconds || 0));
+  const durationSeconds = Math.max(0, Number(partial?.durationSeconds || 0));
+  return {
+    startSeconds,
+    endSeconds: startSeconds + durationSeconds
+  };
+}
+
 export function contiguousBufferedAhead(buffered, currentTime = 0, toleranceSeconds = 0.12) {
   if (!buffered?.length) return 0;
   const cursor = Math.max(0, Number(currentTime || 0));
@@ -200,14 +209,13 @@ export class ProgressiveManimPlayer {
     });
     if (generation !== this.generation) return;
     this.sourceBuffer = this.mediaSource.addSourceBuffer(mimeType);
-    // Every Manim checkpoint is an independent fMP4 whose timestamps begin
-    // at zero. Sequence mode lets MSE place them exactly after one another;
-    // rounded metadata offsets in segments mode can leave playback-stalling
-    // gaps between otherwise ready fragments.
-    this.sourceBuffer.mode = 'sequence';
+    // Backend normalizes every fragment to zero-based, B-frame-free timestamps.
+    // Explicit segment offsets and append windows prevent AAC tail samples from
+    // extending a chunk and creating a tiny freeze at every boundary.
+    this.sourceBuffer.mode = 'segments';
   }
 
-  async appendBuffer(data, timestampOffset, generation, retry = true) {
+  async appendBuffer(data, timestampOffset, generation, retry = true, appendWindow = null) {
     if (generation !== this.generation) return;
     await new Promise((resolve, reject) => {
       const done = () => {
@@ -225,6 +233,10 @@ export class ProgressiveManimPlayer {
       this.sourceBuffer.addEventListener('updateend', done, { once: true });
       this.sourceBuffer.addEventListener('error', failed, { once: true });
       try {
+        if (appendWindow) {
+          this.sourceBuffer.appendWindowEnd = appendWindow.endSeconds;
+          this.sourceBuffer.appendWindowStart = appendWindow.startSeconds;
+        }
         if (Number.isFinite(timestampOffset)) this.sourceBuffer.timestampOffset = timestampOffset;
         this.sourceBuffer.appendBuffer(data);
       } catch (error) {
@@ -243,7 +255,7 @@ export class ProgressiveManimPlayer {
             this.sourceBuffer.addEventListener('updateend', resolve, { once: true });
             this.sourceBuffer.remove(0, removeUntil);
           });
-          return this.appendBuffer(data, timestampOffset, generation, false);
+          return this.appendBuffer(data, timestampOffset, generation, false, appendWindow);
         }
       }
       throw error;
@@ -269,7 +281,8 @@ export class ProgressiveManimPlayer {
       await this.appendBuffer(init, Number.NaN, generation);
       this.initAppended = true;
     }
-    await this.appendBuffer(media, Number.NaN, generation);
+    const timeline = partialTimeline(partial);
+    await this.appendBuffer(media, timeline.startSeconds, generation, true, timeline);
     this.appendedSequences.add(partial.sequence);
     this.queuedSequences.delete(partial.sequence);
     this.nextSequence += 1;

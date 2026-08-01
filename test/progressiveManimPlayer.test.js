@@ -5,6 +5,7 @@ import {
   hasPlaybackBuffer,
   manifestBelongsTo,
   orderedNewPartials,
+  partialTimeline,
   splitFragmentedMp4
 } from '../src/legacy/progressiveManimPlayer.js';
 
@@ -72,6 +73,13 @@ test('tampon hesabi zaman cizelgesindeki boslugu gecmez', () => {
   assert.equal(contiguousBufferedAhead(ranges, 3), 5);
   assert.equal(contiguousBufferedAhead(ranges, 10), 0);
   assert.equal(contiguousBufferedAhead(ranges, 22), 18);
+});
+
+test('partial MSE zaman penceresi backend zaman cizelgesini aynen kullanir', () => {
+  assert.deepEqual(partialTimeline({ startSeconds: 6.4, durationSeconds: 6.9 }), {
+    startSeconds: 6.4,
+    endSeconds: 13.3
+  });
 });
 
 test('kucuk kare yuvarlama bosluklarini tek kesintisiz tampon sayar', () => {
