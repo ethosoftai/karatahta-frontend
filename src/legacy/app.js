@@ -1009,6 +1009,16 @@ async function monitorFullLessonJob(job) {
       stdout: error.details?.stdout,
       stderr: error.details?.stderr
     });
+    progressiveManimPlayer.stop();
+    state.liveManim.active = false;
+    state.liveManim.enabled = false;
+    state.liveManim.failed = true;
+    els.liveManimVideo.classList.remove('visible');
+    els.liveStreamBadge.classList.add('hidden');
+    setVideoLoading(false);
+    if (!hasVisibleVideo()) {
+      setVideoOverlay(`Üretim durdu: ${error.message}`, true);
+    }
     stopPreparingProgress({ error: error.message });
     setStatus(error.message, true);
   } finally {
