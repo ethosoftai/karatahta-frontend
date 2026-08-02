@@ -194,6 +194,7 @@ p {
 }
 
 .historyItem {
+  min-width: 0;
   min-height: 42px;
   display: flex;
   align-items: center;
