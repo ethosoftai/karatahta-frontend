@@ -1181,6 +1181,43 @@ function renderMathMarkdown(value) {
     .join('');
 }
 
+function safeChatUrl(value) {
+  try {
+    const url = new URL(apiUrl(String(value || '')), window.location.href);
+    return ['http:', 'https:'].includes(url.protocol) ? url.href : '';
+  } catch {
+    return '';
+  }
+}
+
+function renderKaraMessageExtras(message) {
+  const tools = Array.isArray(message.toolsUsed) ? message.toolsUsed : [];
+  const artifacts = (Array.isArray(message.artifacts) ? message.artifacts : [])
+    .map((artifact) => ({ ...artifact, safeUrl: safeChatUrl(artifact?.url) }))
+    .filter((artifact) => artifact.type === 'image' && artifact.safeUrl);
+  const sources = (Array.isArray(message.sources) ? message.sources : [])
+    .map((source) => ({ ...source, safeUrl: safeChatUrl(source?.url) }))
+    .filter((source) => source.safeUrl);
+
+  return `
+    ${tools.length ? `<div class="karaToolBadges">${tools.map((tool) => (
+      `<span>${escapeHtml(tool === 'web_search' ? 'Web araması' : tool === 'generate_manim' ? 'Manim görseli' : tool)}</span>`
+    )).join('')}</div>` : ''}
+    ${artifacts.map((artifact) => `
+      <figure class="karaArtifact">
+        <img src="${escapeHtml(artifact.safeUrl)}" alt="${escapeHtml(artifact.title || 'Kara tarafından oluşturulan Manim görseli')}" loading="lazy">
+        <figcaption>${escapeHtml(artifact.title || 'Kara Manim görseli')}</figcaption>
+      </figure>
+    `).join('')}
+    ${sources.length ? `
+      <div class="karaSources">
+        <strong>Kaynaklar</strong>
+        ${sources.map((source) => `<a href="${escapeHtml(source.safeUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(source.title || source.safeUrl)}</a>`).join('')}
+      </div>
+    ` : ''}
+  `;
+}
+
 function typesetKaraChat() {
   if (!window.MathJax?.typesetPromise) {
     return;
@@ -1207,7 +1244,7 @@ function renderKaraChat() {
             <span>Kara düşünüyor</span>
             <span class="typingDots" aria-hidden="true"><i></i><i></i><i></i></span>
           </div>
-        ` : renderMathMarkdown(message.content)}
+        ` : `${renderMathMarkdown(message.content)}${renderKaraMessageExtras(message)}`}
       </div>
     </article>
   `).join('');
@@ -1347,10 +1384,16 @@ async function submitKaraQuestion(event) {
     });
     pendingAnswer.content = data.answer || 'Bu soruya cevap uretilemedi.';
     pendingAnswer.visionUsed = data.visionUsed === true;
+    pendingAnswer.toolsUsed = Array.isArray(data.toolsUsed) ? data.toolsUsed : [];
+    pendingAnswer.artifacts = Array.isArray(data.artifacts) ? data.artifacts : [];
+    pendingAnswer.sources = Array.isArray(data.sources) ? data.sources : [];
     pendingAnswer.pending = false;
     renderKaraChat();
+    const usedTools = pendingAnswer.toolsUsed.length
+      ? ` (${pendingAnswer.toolsUsed.join(', ')})`
+      : '';
     setStatus(data.visionUsed === true
-      ? 'Kara video karesini inceleyerek cevap verdi.'
+      ? `Kara video karesini inceleyerek cevap verdi${usedTools}.`
       : 'Kara görsel modele ulaşamadı; metin bağlamıyla cevap verdi.', data.visionUsed !== true);
   } catch (error) {
     pendingAnswer.content = `Cevap alinamadi: ${error.message}`;

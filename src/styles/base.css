@@ -779,13 +779,13 @@ p {
 
 .karaAskForm {
   position: relative;
-  width: min(720px, calc(100% - 32px));
+  width: min(980px, calc(100% - 16px));
   min-height: 52px;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
-  margin: 14px auto 0;
+  margin: 14px 0 0;
   padding: 6px 6px 6px 18px;
   border: 1px solid var(--border);
   border-radius: 999px;
@@ -889,6 +889,69 @@ p {
 
 .chatContent p:last-child {
   margin-bottom: 0;
+}
+
+.karaToolBadges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+  font-family: Ubuntu, ui-sans-serif, system-ui, sans-serif;
+}
+
+.karaToolBadges span {
+  padding: 4px 8px;
+  border: 1px solid rgba(79, 142, 247, 0.35);
+  border-radius: 999px;
+  background: rgba(79, 142, 247, 0.1);
+  color: #9cc2ff;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.karaArtifact {
+  width: min(680px, 100%);
+  margin: 12px 0 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #050607;
+}
+
+.karaArtifact img {
+  width: 100%;
+  height: auto;
+  display: block;
+  object-fit: contain;
+}
+
+.karaArtifact figcaption {
+  padding: 8px 10px;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-family: Ubuntu, ui-sans-serif, system-ui, sans-serif;
+  font-size: 12px;
+}
+
+.karaSources {
+  display: grid;
+  gap: 5px;
+  margin-top: 12px;
+  font-family: Ubuntu, ui-sans-serif, system-ui, sans-serif;
+  font-size: 12px;
+}
+
+.karaSources strong {
+  color: var(--muted);
+}
+
+.karaSources a {
+  width: fit-content;
+  max-width: 100%;
+  overflow: hidden;
+  color: #9cc2ff;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .watchMeta {
