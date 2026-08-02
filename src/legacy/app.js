@@ -1,5 +1,6 @@
 import { ProgressiveManimPlayer } from './progressiveManimPlayer.js';
 import { BackendRouter } from './backendRouter.js';
+import { KaraLiveClient } from './karaLiveClient.js';
 
 // Existing production workflow, loaded after the React shell mounts.
 const backendTargets = window.KARA_BACKEND_URLS || {
@@ -65,7 +66,13 @@ const state = {
     events: [],
     lastEventKey: null
   },
-  karaChat: []
+  karaChat: [],
+  karaLive: {
+    client: null,
+    active: false,
+    liveUserMessage: null,
+    liveAssistantMessage: null
+  }
 };
 
 let controlsHideTimer = null;
@@ -166,6 +173,7 @@ const els = {
   karaQuestionInput: document.querySelector('#karaQuestionInput'),
   karaTimestamp: document.querySelector('#karaTimestamp'),
   karaSendBtn: document.querySelector('#karaSendBtn'),
+  karaLiveBtn: document.querySelector('#karaLiveBtn'),
   karaChat: document.querySelector('#karaChat'),
   logOutput: document.querySelector('#logOutput'),
   developerConsoleStatus: document.querySelector('#developerConsoleStatus'),
@@ -686,6 +694,7 @@ function beginNewLesson() {
   state.speechBySegment = new Map();
   resetProgressivePlayback();
   backendRouter.setLocked(false);
+  stopKaraLive();
   resetKaraChat();
   setWorkspaceLoading(false);
   setVideoLoading(false);
@@ -1469,6 +1478,119 @@ async function submitKaraQuestion(event) {
     els.karaSendBtn.disabled = false;
     els.karaQuestionInput.focus();
   }
+}
+
+function buildKaraLiveWsUrl() {
+  const baseUrl = backendRouter.activeBaseUrl || window.location.origin;
+  return `${baseUrl.replace(/^http/, 'ws')}/api/kara-live`;
+}
+
+function setKaraLiveActive(active) {
+  state.karaLive.active = active;
+  els.karaLiveBtn.classList.toggle('active', active);
+  els.karaLiveBtn.setAttribute('aria-pressed', String(active));
+  els.karaLiveBtn.setAttribute('aria-label', active ? 'Sesli konuşmayı bitir' : 'Sesli konuş');
+  els.karaQuestionInput.disabled = active;
+  els.karaSendBtn.disabled = active;
+}
+
+function finalizeLiveMessage(key) {
+  const pending = state.karaLive[key];
+  state.karaLive[key] = null;
+  if (!pending) return;
+  if (!(pending.content || '').trim()) {
+    state.karaChat = state.karaChat.filter((message) => message !== pending);
+  }
+}
+
+function finalizeLiveTurn() {
+  finalizeLiveMessage('liveUserMessage');
+  finalizeLiveMessage('liveAssistantMessage');
+  renderKaraChat();
+}
+
+function ensureLiveMessage(key, role) {
+  if (!state.karaLive[key]) {
+    const message = { role, timestamp: formatTime(currentQuestionTimestamp()), content: '', live: true };
+    state.karaLive[key] = message;
+    state.karaChat.push(message);
+  }
+  return state.karaLive[key];
+}
+
+function handleKaraLiveEvent(event) {
+  switch (event.type) {
+    case 'ready':
+      setStatus('Kara ile sesli baglanti kuruldu; konusabilirsin.');
+      break;
+    case 'server_content': {
+      if (event.inputTranscript) {
+        const message = ensureLiveMessage('liveUserMessage', 'user');
+        message.content = `${message.content}${event.inputTranscript}`;
+        renderKaraChat();
+      }
+      if (event.outputTranscript) {
+        const message = ensureLiveMessage('liveAssistantMessage', 'assistant');
+        message.content = `${message.content}${event.outputTranscript}`;
+        renderKaraChat();
+      }
+      if (event.turnComplete) {
+        finalizeLiveTurn();
+      }
+      break;
+    }
+    case 'tools_executed':
+      setStatus(`Kara ${event.names.join(', ')} aracini kullaniyor...`);
+      break;
+    case 'error':
+      setStatus(event.message, true);
+      break;
+    case 'closed':
+      setStatus('Sesli baglanti kapandi.');
+      stopKaraLive();
+      break;
+    default:
+      break;
+  }
+}
+
+async function toggleKaraLive() {
+  if (state.karaLive.active) {
+    stopKaraLive();
+    return;
+  }
+  if (!state.auth.session?.access_token) {
+    setStatus('Sesli konusmak icin giris yapmalisin.', true);
+    return;
+  }
+  if (!state.lessonId) {
+    setStatus('Sesli konusmak icin bir ders acik olmali.', true);
+    return;
+  }
+
+  try {
+    const client = new KaraLiveClient({
+      wsUrl: buildKaraLiveWsUrl(),
+      token: state.auth.session.access_token,
+      lessonId: state.lessonId,
+      onEvent: handleKaraLiveEvent,
+      onError: (error) => setStatus(error.message, true)
+    });
+    await client.start();
+    state.karaLive.client = client;
+    setKaraLiveActive(true);
+    setStatus('Mikrofon acik; Kara seni dinliyor.');
+  } catch (error) {
+    setStatus(`Mikrofona erisilemedi: ${error.message}`, true);
+    setKaraLiveActive(false);
+  }
+}
+
+function stopKaraLive() {
+  state.karaLive.client?.stop();
+  state.karaLive.client = null;
+  finalizeLiveTurn();
+  setKaraLiveActive(false);
 }
 
 function segmentDuration(segment, index) {
@@ -2635,11 +2757,13 @@ els.logoutBtn.addEventListener('click', () => {
   state.lessons = [];
   resetProgressivePlayback();
   backendRouter.setLocked(false);
+  stopKaraLive();
   resetKaraChat();
   showHome();
   showAuth('Cikis yapildi.', false);
 });
 
+els.karaLiveBtn.addEventListener('click', toggleKaraLive);
 els.karaQuestionInput.addEventListener('input', updateKaraTimestamp);
 els.karaAskForm.addEventListener('submit', submitKaraQuestion);
 
