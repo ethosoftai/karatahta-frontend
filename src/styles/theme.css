@@ -400,7 +400,7 @@ body {
 }
 
 .appShell {
-  grid-template-columns: 248px minmax(0, 1fr);
+  grid-template-columns: 300px minmax(0, 1fr);
   background: #08090a;
 }
 
