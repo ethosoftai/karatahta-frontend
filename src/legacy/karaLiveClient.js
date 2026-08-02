@@ -2,9 +2,14 @@
 // Input is downsampled to 16kHz PCM16 (what Gemini Live expects); output arrives
 // as 24kHz PCM16 chunks and is scheduled back-to-back for gapless playback.
 
+// `?url` (not `new URL(..., import.meta.url)`) matters here: Vite's dev server
+// wraps normally-served modules with HMR runtime code that AudioWorkletGlobalScope
+// can't execute ("Unable to load a worklet's module"). The `?url` suffix serves
+// the file as a raw, untransformed asset URL instead, in both dev and build.
+import karaLiveWorkletUrl from './karaLiveWorkletProcessor.js?url';
+
 const OUTPUT_SAMPLE_RATE = 24000;
 const TARGET_INPUT_SAMPLE_RATE = 16000;
-const CAPTURE_BUFFER_SIZE = 4096;
 
 function downsampleTo16k(float32Samples, inputSampleRate) {
   if (inputSampleRate === TARGET_INPUT_SAMPLE_RATE) {
@@ -91,15 +96,20 @@ export class KaraLiveClient {
 
     this.captureContext = new (window.AudioContext || window.webkitAudioContext)();
     const source = this.captureContext.createMediaStreamSource(this.captureStream);
-    this.captureNode = this.captureContext.createScriptProcessor(CAPTURE_BUFFER_SIZE, 1, 1);
-    this.captureNode.onaudioprocess = (audioEvent) => {
+    await this.captureContext.audioWorklet.addModule(karaLiveWorkletUrl);
+    this.captureNode = new AudioWorkletNode(this.captureContext, 'kara-live-capture');
+    this.captureNode.port.onmessage = (workletEvent) => {
       if (!this.active || this.socket?.readyState !== WebSocket.OPEN) return;
-      const input = audioEvent.inputBuffer.getChannelData(0);
-      const downsampled = downsampleTo16k(input, this.captureContext.sampleRate);
+      const downsampled = downsampleTo16k(workletEvent.data, this.captureContext.sampleRate);
       this.socket.send(JSON.stringify({ type: 'audio', data: floatTo16BitPcmBase64(downsampled) }));
     };
     source.connect(this.captureNode);
-    this.captureNode.connect(this.captureContext.destination);
+    // AudioWorkletNode must stay connected into the graph to keep processing;
+    // route it through a silent gain so nothing is audibly looped back.
+    this.captureSilencer = this.captureContext.createGain();
+    this.captureSilencer.gain.value = 0;
+    this.captureNode.connect(this.captureSilencer);
+    this.captureSilencer.connect(this.captureContext.destination);
 
     this.playbackContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: OUTPUT_SAMPLE_RATE });
     this.nextPlaybackTime = 0;
@@ -156,6 +166,8 @@ export class KaraLiveClient {
     this.socket = null;
     this.captureNode?.disconnect();
     this.captureNode = null;
+    this.captureSilencer?.disconnect();
+    this.captureSilencer = null;
     this.captureStream?.getTracks().forEach((track) => track.stop());
     this.captureStream = null;
     this.captureContext?.close().catch(() => {});
