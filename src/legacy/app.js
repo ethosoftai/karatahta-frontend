@@ -1198,7 +1198,9 @@ function renderKaraChat() {
   els.karaChat.classList.remove('hidden');
   els.karaChat.innerHTML = state.karaChat.map((message) => `
     <article class="chatMessage ${message.role === 'assistant' ? 'assistant' : 'user'} ${message.pending ? 'pending' : ''}" ${message.pending ? 'aria-busy="true"' : ''}>
-      <div class="chatMeta">${message.role === 'assistant' ? 'Kara' : `Sen · ${escapeHtml(message.timestamp || '')}`}</div>
+      <div class="chatMeta">${message.role === 'assistant'
+        ? `Kara${message.pending ? ' · kare inceleniyor' : message.visionUsed === true ? ' · kareyi gördü' : message.visionUsed === false ? ' · yalnızca metin bağlamı' : ''}`
+        : `Sen · ${escapeHtml(message.timestamp || '')}`}</div>
       <div class="chatContent">
         ${message.pending ? `
           <div class="chatThinking">
@@ -1344,9 +1346,12 @@ async function submitKaraQuestion(event) {
       chat_history: chatHistory
     });
     pendingAnswer.content = data.answer || 'Bu soruya cevap uretilemedi.';
+    pendingAnswer.visionUsed = data.visionUsed === true;
     pendingAnswer.pending = false;
     renderKaraChat();
-    setStatus('Kara cevap verdi.');
+    setStatus(data.visionUsed === true
+      ? 'Kara video karesini inceleyerek cevap verdi.'
+      : 'Kara görsel modele ulaşamadı; metin bağlamıyla cevap verdi.', data.visionUsed !== true);
   } catch (error) {
     pendingAnswer.content = `Cevap alinamadi: ${error.message}`;
     pendingAnswer.pending = false;
