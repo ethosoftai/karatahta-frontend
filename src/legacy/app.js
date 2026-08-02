@@ -68,6 +68,7 @@ const state = {
   },
   karaChat: [],
   googleDriveEnabled: false,
+  karaLiveEnabled: false,
   karaLive: {
     client: null,
     active: false,
@@ -2053,6 +2054,8 @@ async function loadConfig() {
   const config = await response.json();
   state.auth.googleOAuthEnabled = Boolean(config.googleOAuthEnabled);
   state.googleDriveEnabled = Boolean(config.googleDriveEnabled);
+  state.karaLiveEnabled = Boolean(config.karaLiveEnabled);
+  els.karaLiveBtn.classList.toggle('hidden', !state.karaLiveEnabled);
   els.configText.textContent = `${(config.llmProvider || 'LLM').toUpperCase()} | Plan ${config.planModel} | Kod ${config.codeModel} | ${config.targetVideoMinutes || 10} dk/${config.targetSegmentCount || 8} segment | TTS ${config.ttsProvider || 'TTS'} ${config.ttsVoice || 'yok'} | Manim ${config.manimQuality} | Font ${config.manimFont || 'varsayilan'}`;
   if (config.targetVideoMinutes && !els.targetMinutesInput.dataset.touched) {
     els.targetMinutesInput.value = config.targetVideoMinutes;

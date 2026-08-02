@@ -58,7 +58,7 @@ export function StudioView() {
         <form id="karaAskForm" className="karaAskForm hidden">
           <span id="karaTimestamp" className="karaTimestamp" />
           <input id="karaQuestionInput" type="text" autoComplete="off" placeholder="Kara'ya sor" />
-          <button id="karaLiveBtn" className="karaLiveBtn" type="button" aria-label="Sesli konuş" aria-pressed="false">
+          <button id="karaLiveBtn" className="karaLiveBtn hidden" type="button" aria-label="Sesli konuş" aria-pressed="false">
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="M12 3a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V6a3 3 0 0 1 3-3Z" />
               <path d="M6 11a6 6 0 0 0 12 0" />
