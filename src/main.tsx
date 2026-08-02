@@ -3,11 +3,17 @@ import { App } from './App';
 import './styles/base.css';
 import './styles/theme.css';
 
-window.KARA_API_BASE_URL = (
+const railwayApiBaseUrl = (
   import.meta.env.VITE_API_BASE_URL
   || window.KARA_API_BASE_URL
   || (import.meta.env.DEV ? '' : 'https://karatahta-backend-production.up.railway.app')
 ).replace(/\/$/, '');
+
+window.KARA_API_BASE_URL = railwayApiBaseUrl;
+window.KARA_BACKEND_URLS = {
+  railway: railwayApiBaseUrl,
+  vps: (import.meta.env.VITE_VPS_API_BASE_URL || 'https://api.karatahta.ethosoft.org').replace(/\/$/, '')
+};
 
 window.MathJax = {
   tex: {

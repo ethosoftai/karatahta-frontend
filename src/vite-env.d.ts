@@ -3,6 +3,10 @@
 declare global {
   interface Window {
     KARA_API_BASE_URL?: string;
+    KARA_BACKEND_URLS?: {
+      railway: string;
+      vps: string;
+    };
     MathJax?: {
       tex?: Record<string, unknown>;
       options?: Record<string, unknown>;

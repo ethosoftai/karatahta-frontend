@@ -1,13 +1,20 @@
 import { ProgressiveManimPlayer } from './progressiveManimPlayer.js';
+import { BackendRouter } from './backendRouter.js';
 
 // Existing production workflow, loaded after the React shell mounts.
-const API_BASE_URL = String(window.KARA_API_BASE_URL || '').replace(/\/$/, '');
+const backendTargets = window.KARA_BACKEND_URLS || {
+  railway: String(window.KARA_API_BASE_URL || '').replace(/\/$/, ''),
+  vps: 'https://api.karatahta.ethosoft.org'
+};
+let handleBackendRouterChange = () => {};
+const backendRouter = new BackendRouter({
+  targets: backendTargets,
+  storage: window.localStorage,
+  onChange: (snapshot, reason) => handleBackendRouterChange(snapshot, reason)
+});
 
 function apiUrl(path) {
-  if (!path || /^https?:\/\//i.test(path)) {
-    return path;
-  }
-  return `${API_BASE_URL}${path.startsWith('/') ? path : `/${path}`}`;
+  return backendRouter.resolve(path);
 }
 
 function cacheBustUrl(url) {
@@ -166,8 +173,62 @@ const els = {
   developerStateMetric: document.querySelector('#developerStateMetric'),
   developerProgressMetric: document.querySelector('#developerProgressMetric'),
   developerBufferMetric: document.querySelector('#developerBufferMetric'),
+  backendActiveBadge: document.querySelector('#backendActiveBadge'),
+  backendModeInputs: [...document.querySelectorAll('input[name="backendMode"]')],
+  backendHealthBtn: document.querySelector('#backendHealthBtn'),
+  backendModeHint: document.querySelector('#backendModeHint'),
+  vpsHealthDot: document.querySelector('#vpsHealthDot'),
+  vpsHealthText: document.querySelector('#vpsHealthText'),
+  railwayHealthDot: document.querySelector('#railwayHealthDot'),
+  railwayHealthText: document.querySelector('#railwayHealthText'),
   renderMeta: document.querySelector('#renderMeta')
 };
+
+function backendLabel(key) {
+  return key === 'vps' ? 'VPS' : 'Railway';
+}
+
+function backendHealthText(health) {
+  if (!health) return 'Kontrol edilmedi';
+  if (!health.online) return health.error === 'timeout' ? 'Zaman aşımı' : 'Erişilemiyor';
+  return `Çevrimiçi · ${health.latencyMs} ms`;
+}
+
+function renderBackendPortal(snapshot = backendRouter.snapshot()) {
+  els.backendActiveBadge.textContent = snapshot.mode === 'hybrid'
+    ? `Hibrit · ${backendLabel(snapshot.activeKey)}`
+    : backendLabel(snapshot.activeKey);
+  els.backendActiveBadge.dataset.backend = snapshot.activeKey;
+  for (const input of els.backendModeInputs) {
+    input.checked = input.value === snapshot.mode;
+    input.disabled = snapshot.locked;
+  }
+  const healthElements = {
+    vps: [els.vpsHealthDot, els.vpsHealthText],
+    railway: [els.railwayHealthDot, els.railwayHealthText]
+  };
+  for (const [key, [dot, text]] of Object.entries(healthElements)) {
+    const health = snapshot.health[key];
+    dot.classList.toggle('online', Boolean(health?.online));
+    dot.classList.toggle('offline', health?.online === false);
+    text.textContent = backendHealthText(health);
+  }
+  els.backendModeHint.textContent = snapshot.locked
+    ? `Bu ders ${backendLabel(snapshot.activeKey)} üzerinde çalışıyor. Değiştirmek için Yeni ders'e geç.`
+    : (snapshot.mode === 'hybrid'
+      ? 'VPS önceliklidir; ulaşılamazsa Railway devralır.'
+      : 'Seçim bu tarayıcıda saklanır.');
+}
+
+handleBackendRouterChange = (snapshot, reason) => {
+  renderBackendPortal(snapshot);
+  if (reason === 'failover') {
+    appendDeveloperEvent('network', `Hibrit sistem ${backendLabel(snapshot.activeKey)} backend'ine geçti.`, {
+      backend: snapshot.activeBaseUrl
+    });
+  }
+};
+renderBackendPortal();
 
 function failLiveManimPlayback(error) {
   if (!state.liveManim.active && state.liveManim.browserFailed) return;
@@ -468,7 +529,7 @@ async function authorizedFetch(url, options = {}, retry = true) {
   ) {
     await refreshAccessToken();
   }
-  const response = await fetch(url, {
+  const response = await backendRouter.request(url, {
     ...options,
     headers: {
       ...(options.headers || {}),
@@ -624,6 +685,7 @@ function beginNewLesson() {
   state.selectedSegment = null;
   state.speechBySegment = new Map();
   resetProgressivePlayback();
+  backendRouter.setLocked(false);
   resetKaraChat();
   setWorkspaceLoading(false);
   setVideoLoading(false);
@@ -699,6 +761,7 @@ async function loadLessonFromHistory(lessonId) {
   setStatus('Ders gecmisten yukleniyor...');
   try {
     const data = await apiGet(`/api/lessons/${encodeURIComponent(requestedLessonId)}`);
+    backendRouter.setLocked(true);
     if (loadVersion !== lessonLoadVersion) return;
     if (String(data.lesson?.id || '') !== requestedLessonId) {
       throw new Error('Sunucu farklı bir ders kaydı döndürdü.');
@@ -781,7 +844,7 @@ async function loadLessonFromHistory(lessonId) {
 }
 
 async function authApi(path, payload = null, options = {}) {
-  const response = await fetch(apiUrl(path), {
+  const response = await backendRouter.request(apiUrl(path), {
     method: options.method || 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -1044,6 +1107,7 @@ async function startFullLessonGeneration() {
   try {
     setStatus('Tam ders uretiliyor...');
     const job = await api('/api/full-video', { plan: state.plan, lesson_id: state.lessonId });
+    backendRouter.setLocked(true);
     await monitorFullLessonJob(job);
   } catch (error) {
     stopPreparingProgress({ error: error.message });
@@ -1801,7 +1865,10 @@ function maybeStartOrContinuePlayback() {
 }
 
 async function loadConfig() {
-  const response = await fetch(apiUrl('/api/config'));
+  const response = await backendRouter.request(apiUrl('/api/config'), { cache: 'no-store' });
+  if (!response.ok) {
+    throw new Error(`Backend ayarlari alinamadi (${response.status}).`);
+  }
   const config = await response.json();
   state.auth.googleOAuthEnabled = Boolean(config.googleOAuthEnabled);
   els.configText.textContent = `${(config.llmProvider || 'LLM').toUpperCase()} | Plan ${config.planModel} | Kod ${config.codeModel} | ${config.targetVideoMinutes || 10} dk/${config.targetSegmentCount || 8} segment | TTS ${config.ttsProvider || 'TTS'} ${config.ttsVoice || 'yok'} | Manim ${config.manimQuality} | Font ${config.manimFont || 'varsayilan'}`;
@@ -1911,6 +1978,7 @@ els.generatePlanBtn.addEventListener('click', async () => {
         prior_knowledge: els.priorInput.value,
         interrupt_question: els.interruptInput.value.trim() || null
       });
+      backendRouter.setLocked(true);
       state.plan = job.plan || {
         topic,
         estimated_duration_minutes: Number(els.targetMinutesInput.value || 10),
@@ -1939,6 +2007,7 @@ els.generatePlanBtn.addEventListener('click', async () => {
       student_level: els.levelInput.value,
       note: topic
     });
+    backendRouter.setLocked(true);
     state.plan = data.plan;
     state.lessonId = data.lessonId || data.plan?._lesson_id || null;
     refreshLessonHistory().catch(() => {});
@@ -2565,6 +2634,7 @@ els.logoutBtn.addEventListener('click', () => {
   saveAuthSession(null);
   state.lessons = [];
   resetProgressivePlayback();
+  backendRouter.setLocked(false);
   resetKaraChat();
   showHome();
   showAuth('Cikis yapildi.', false);
@@ -2572,6 +2642,41 @@ els.logoutBtn.addEventListener('click', () => {
 
 els.karaQuestionInput.addEventListener('input', updateKaraTimestamp);
 els.karaAskForm.addEventListener('submit', submitKaraQuestion);
+
+for (const input of els.backendModeInputs) {
+  input.addEventListener('change', async () => {
+    if (!input.checked) return;
+    try {
+      backendRouter.setMode(input.value);
+      setStatus(`${backendLabel(backendRouter.activeKey)} backend'i seçildi.`);
+      const config = await loadConfig();
+      state.auth.googleOAuthEnabled = Boolean(config.googleOAuthEnabled);
+      if (state.auth.session?.access_token) {
+        await refreshLessonHistory();
+      }
+      if (backendRouter.mode === 'hybrid') {
+        await backendRouter.checkHealth();
+      }
+    } catch (error) {
+      renderBackendPortal();
+      setStatus(error.message, true);
+    }
+  });
+}
+
+els.backendHealthBtn.addEventListener('click', async () => {
+  els.backendHealthBtn.disabled = true;
+  els.backendHealthBtn.textContent = 'Test ediliyor...';
+  try {
+    await backendRouter.checkHealth();
+    const snapshot = backendRouter.snapshot();
+    const onlineCount = Object.values(snapshot.health).filter((health) => health?.online).length;
+    setStatus(`${onlineCount}/2 backend erişilebilir. Aktif: ${backendLabel(snapshot.activeKey)}.`);
+  } finally {
+    els.backendHealthBtn.disabled = false;
+    els.backendHealthBtn.textContent = 'Bağlantıları test et';
+  }
+});
 
 els.topicInput.addEventListener('keydown', (event) => {
   if (event.key !== 'Enter' || event.shiftKey) {
@@ -2664,5 +2769,12 @@ loadConfig()
     showAuth(error.message, true);
     setStatus(error.message, true);
   });
+
+void backendRouter.checkHealth();
+window.setInterval(() => {
+  if (backendRouter.mode === 'hybrid' && !backendRouter.locked) {
+    void backendRouter.checkHealth();
+  }
+}, 30000);
 
 export {};

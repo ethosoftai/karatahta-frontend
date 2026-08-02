@@ -9,6 +9,20 @@ repo yalnız frontend'i içerir; üretim API'si ayrı bir Railway servisinde
 | Parça | Adres / repo |
 | --- | --- |
 | Frontend | `https://karatahta.ethosoft.org` |
+| Railway backend | `https://karatahta-backend-production.up.railway.app` |
+| VPS backend | `https://api.karatahta.ethosoft.org` |
+
+Developer portalda backend altyapısı tarayıcı bazında seçilebilir:
+
+- **Railway:** Bütün API istekleri Railway'e gider.
+- **VPS:** Bütün API istekleri VPS'e gider.
+- **Hibrit:** VPS birincil, Railway otomatik yedektir. GET/health istekleri
+  güvenli biçimde failover edilir. Bir video işi başladığında job, SSE ve medya
+  parçalarının iki sunucu arasında bölünmemesi için aktif backend ders boyunca
+  kilitlenir.
+
+Railway adresi `VITE_API_BASE_URL`, VPS adresi ise isteğe bağlı
+`VITE_VPS_API_BASE_URL` build değişkeniyle ezilebilir.
 | Backend API | `https://karatahta-backend-production.up.railway.app` |
 | Frontend repo | `https://github.com/ethosoftai/karatahta-frontend` (`main`) |
 | Backend repo | `https://github.com/ethosoftai/karatahta-backend` (`railway`) |
