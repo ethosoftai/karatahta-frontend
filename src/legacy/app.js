@@ -24,7 +24,32 @@ function cacheBustUrl(url) {
   return `${url}${separator}t=${Date.now()}`;
 }
 
+const SETTINGS_STORAGE_KEY = 'karaSettings';
+const DEFAULT_SETTINGS = {
+  level: 'beginner',
+  targetMinutes: null,
+  targetSegments: null,
+  priorKnowledge: '',
+  ttsVoice: 'tr-TR-AhmetNeural',
+  speechVolume: 1.25,
+  musicVolume: 0.1
+};
+
+function loadSettings() {
+  try {
+    const stored = JSON.parse(window.localStorage.getItem(SETTINGS_STORAGE_KEY) || 'null');
+    return { ...DEFAULT_SETTINGS, ...(stored || {}) };
+  } catch {
+    return { ...DEFAULT_SETTINGS };
+  }
+}
+
+function saveSettings(settings) {
+  window.localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+}
+
 const state = {
+  settings: loadSettings(),
   auth: {
     session: null,
     profile: null,
@@ -192,7 +217,15 @@ const els = {
   vpsHealthText: document.querySelector('#vpsHealthText'),
   railwayHealthDot: document.querySelector('#railwayHealthDot'),
   railwayHealthText: document.querySelector('#railwayHealthText'),
-  renderMeta: document.querySelector('#renderMeta')
+  renderMeta: document.querySelector('#renderMeta'),
+  settingsDefaultLevel: document.querySelector('#settingsDefaultLevel'),
+  settingsDefaultMinutes: document.querySelector('#settingsDefaultMinutes'),
+  settingsDefaultSegments: document.querySelector('#settingsDefaultSegments'),
+  settingsDefaultPrior: document.querySelector('#settingsDefaultPrior'),
+  settingsTtsVoice: document.querySelector('#settingsTtsVoice'),
+  settingsSpeechVolume: document.querySelector('#settingsSpeechVolume'),
+  settingsMusicVolume: document.querySelector('#settingsMusicVolume'),
+  settingsResetBtn: document.querySelector('#settingsResetBtn')
 };
 
 function backendLabel(key) {
@@ -726,11 +759,14 @@ function renderLessonHistory() {
       <input id="lessonSearchInput" type="search" value="${escapeHtml(state.lessonSearch)}" placeholder="Derslerde ara">
     </label>
     ${visibleLessons.map((lesson) => `
-      <button class="historyItem ${lesson.id === state.lessonId ? 'active' : ''}" type="button" data-lesson-id="${escapeHtml(lesson.id)}">
-        <span class="historyText">
-          <strong>${escapeHtml(lesson.title || lesson.topic || 'Ders')}</strong>
-        </span>
-      </button>
+      <div class="historyItem ${lesson.id === state.lessonId ? 'active' : ''}">
+        <button class="historyRowBtn" type="button" data-lesson-id="${escapeHtml(lesson.id)}">
+          <span class="historyText">
+            <strong>${escapeHtml(lesson.title || lesson.topic || 'Ders')}</strong>
+          </span>
+        </button>
+        <button class="historyDeleteBtn" type="button" data-delete-lesson-id="${escapeHtml(lesson.id)}" aria-label="Dersi sil" title="Dersi sil">✕</button>
+      </div>
     `).join('')}
   `;
 }
@@ -739,6 +775,25 @@ async function refreshLessonHistory() {
   const data = await apiGet('/api/lessons');
   state.lessons = data.lessons || [];
   renderLessonHistory();
+}
+
+async function handleDeleteLesson(lessonId) {
+  if (!lessonId) return;
+  const lesson = (state.lessons || []).find((item) => item.id === lessonId);
+  const label = lesson?.title || lesson?.topic || 'Bu ders';
+  if (!window.confirm(`"${label}" silinsin mi? Bu islem geri alinamaz.`)) return;
+  try {
+    await apiDelete(`/api/lessons/${encodeURIComponent(lessonId)}`);
+    state.lessons = (state.lessons || []).filter((item) => item.id !== lessonId);
+    if (state.lessonId === lessonId) {
+      beginNewLesson();
+    } else {
+      renderLessonHistory();
+    }
+    setStatus('Ders silindi.');
+  } catch (error) {
+    setStatus(error.message, true);
+  }
 }
 
 function localVideoUrl(relativePath) {
@@ -876,6 +931,19 @@ async function authApi(path, payload = null, options = {}) {
 
 async function apiGet(path) {
   const response = await authorizedFetch(apiUrl(path));
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    if (response.status === 401) {
+      saveAuthSession(null);
+      showAuth('Oturum suresi doldu. Lutfen tekrar giris yap.', true);
+    }
+    throw new Error(data.error || 'Istek basarisiz oldu.');
+  }
+  return data;
+}
+
+async function apiDelete(path) {
+  const response = await authorizedFetch(apiUrl(path), { method: 'DELETE' });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
     if (response.status === 401) {
@@ -1121,7 +1189,11 @@ async function startFullLessonGeneration() {
 
   try {
     setStatus('Tam ders uretiliyor...');
-    const job = await api('/api/full-video', { plan: state.plan, lesson_id: state.lessonId });
+    const job = await api('/api/full-video', {
+      plan: state.plan,
+      lesson_id: state.lessonId,
+      ...ttsOptionsPayload()
+    });
     backendRouter.setLocked(true);
     await monitorFullLessonJob(job);
   } catch (error) {
@@ -2046,6 +2118,78 @@ function maybeStartOrContinuePlayback() {
   preloadNextSegment();
 }
 
+function renderSettingsPanel() {
+  els.settingsDefaultLevel.value = state.settings.level;
+  els.settingsDefaultMinutes.value = state.settings.targetMinutes ?? '';
+  els.settingsDefaultSegments.value = state.settings.targetSegments ?? '';
+  els.settingsDefaultPrior.value = state.settings.priorKnowledge;
+  els.settingsTtsVoice.value = state.settings.ttsVoice;
+  els.settingsSpeechVolume.value = state.settings.speechVolume;
+  els.settingsMusicVolume.value = state.settings.musicVolume;
+}
+
+function applyLessonDefaultsToForm() {
+  if (state.settings.level) {
+    els.levelInput.value = state.settings.level;
+  }
+  if (state.settings.targetMinutes && !els.targetMinutesInput.dataset.touched) {
+    els.targetMinutesInput.value = state.settings.targetMinutes;
+  }
+  if (state.settings.targetSegments && !els.targetSegmentsInput.dataset.touched) {
+    els.targetSegmentsInput.value = state.settings.targetSegments;
+  }
+  if (state.settings.priorKnowledge) {
+    els.priorInput.value = state.settings.priorKnowledge;
+  }
+}
+
+function ttsOptionsPayload() {
+  return {
+    tts_voice: state.settings.ttsVoice,
+    speech_volume: state.settings.speechVolume,
+    background_music_volume: state.settings.musicVolume
+  };
+}
+
+function readSettingsFromPanel() {
+  return {
+    level: els.settingsDefaultLevel.value,
+    targetMinutes: els.settingsDefaultMinutes.value ? Number(els.settingsDefaultMinutes.value) : null,
+    targetSegments: els.settingsDefaultSegments.value ? Number(els.settingsDefaultSegments.value) : null,
+    priorKnowledge: els.settingsDefaultPrior.value,
+    ttsVoice: els.settingsTtsVoice.value,
+    speechVolume: Number(els.settingsSpeechVolume.value),
+    musicVolume: Number(els.settingsMusicVolume.value)
+  };
+}
+
+[
+  els.settingsDefaultLevel,
+  els.settingsDefaultMinutes,
+  els.settingsDefaultSegments,
+  els.settingsDefaultPrior,
+  els.settingsTtsVoice,
+  els.settingsSpeechVolume,
+  els.settingsMusicVolume
+].forEach((input) => {
+  input.addEventListener('change', () => {
+    state.settings = readSettingsFromPanel();
+    saveSettings(state.settings);
+    applyLessonDefaultsToForm();
+  });
+});
+
+els.settingsResetBtn.addEventListener('click', () => {
+  state.settings = { ...DEFAULT_SETTINGS };
+  saveSettings(state.settings);
+  renderSettingsPanel();
+  applyLessonDefaultsToForm();
+  setStatus('Ayarlar varsayilana dondu.');
+});
+
+renderSettingsPanel();
+applyLessonDefaultsToForm();
+
 async function loadConfig() {
   const response = await backendRouter.request(apiUrl('/api/config'), { cache: 'no-store' });
   if (!response.ok) {
@@ -2163,7 +2307,8 @@ els.generatePlanBtn.addEventListener('click', async () => {
         target_segment_count: Number(els.targetSegmentsInput.value || 8),
         duration_touched: Boolean(els.targetMinutesInput.dataset.touched || els.targetSegmentsInput.dataset.touched),
         prior_knowledge: els.priorInput.value,
-        interrupt_question: els.interruptInput.value.trim() || null
+        interrupt_question: els.interruptInput.value.trim() || null,
+        ...ttsOptionsPayload()
       });
       backendRouter.setLocked(true);
       state.plan = job.plan || {
@@ -2732,6 +2877,11 @@ els.googleAuthBtn.addEventListener('click', async () => {
 });
 
 els.historyList.addEventListener('click', (event) => {
+  const deleteButton = event.target.closest('button[data-delete-lesson-id]');
+  if (deleteButton) {
+    void handleDeleteLesson(deleteButton.dataset.deleteLessonId);
+    return;
+  }
   const button = event.target.closest('button');
   if (!button) return;
   if (button.dataset.newLesson) {

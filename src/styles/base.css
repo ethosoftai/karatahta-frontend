@@ -197,7 +197,8 @@ p {
   min-height: 42px;
   display: flex;
   align-items: center;
-  padding: 7px 9px;
+  gap: 2px;
+  padding: 7px 6px 7px 9px;
   border: 1px solid transparent;
   border-radius: 8px;
   background: transparent;
@@ -209,6 +210,44 @@ p {
 .historyItem.active {
   border-color: var(--border);
   background: var(--surface-2);
+}
+
+.historyRowBtn {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  border: none;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  padding: 0;
+}
+
+.historyDeleteBtn {
+  flex: 0 0 auto;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1;
+}
+
+.historyItem:hover .historyDeleteBtn,
+.historyItem:focus-within .historyDeleteBtn {
+  display: inline-flex;
+}
+
+.historyDeleteBtn:hover {
+  border-color: var(--danger);
+  background: var(--surface-2);
+  color: var(--danger);
 }
 
 .historySearch {
@@ -396,6 +435,46 @@ p {
   color: var(--muted);
   font-size: 9px;
   line-height: 1.4;
+}
+
+.settingsField {
+  display: grid;
+  gap: 4px;
+}
+
+.settingsField span {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.settingsField select,
+.settingsField input[type="text"],
+.settingsField input[type="number"] {
+  min-height: 32px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface-2);
+  color: var(--text);
+  padding: 0 8px;
+  font-size: 12px;
+}
+
+.settingsFieldRange {
+  gap: 2px;
+}
+
+.settingsField input[type="range"] {
+  width: 100%;
+  accent-color: var(--primary);
+}
+
+#settingsResetBtn {
+  min-height: 30px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text);
+  font-size: 10px;
 }
 
 .historyItem strong,
