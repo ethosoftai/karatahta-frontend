@@ -67,6 +67,7 @@ const state = {
     lastEventKey: null
   },
   karaChat: [],
+  googleDriveEnabled: false,
   karaLive: {
     client: null,
     active: false,
@@ -135,6 +136,7 @@ const els = {
   generatePlanBtn: document.querySelector('#generatePlanBtn'),
   backHomeBtn: document.querySelector('#backHomeBtn'),
   downloadVideoBtn: document.querySelector('#downloadVideoBtn'),
+  saveToDriveBtn: document.querySelector('#saveToDriveBtn'),
   lessonTitle: document.querySelector('#lessonTitle'),
   planMeta: document.querySelector('#planMeta'),
   planOutput: document.querySelector('#planOutput'),
@@ -649,6 +651,7 @@ function consumeAuthRedirect() {
   const expiresIn = Number(hash.get('expires_in') || 3600);
   const flow = hash.get('type') || query.get('auth');
   const error = hash.get('error_description') || query.get('error_description');
+  const providerRefreshToken = hash.get('provider_refresh_token');
 
   if (accessToken) {
     saveAuthSession({
@@ -672,7 +675,9 @@ function consumeAuthRedirect() {
   return {
     error,
     isRecovery: flow === 'recovery' && Boolean(accessToken),
-    isConfirmed: flow === 'confirmed' || flow === 'signup'
+    isConfirmed: flow === 'confirmed' || flow === 'signup',
+    isDriveConnect: flow === 'drive' && Boolean(accessToken),
+    providerRefreshToken: providerRefreshToken || null
   };
 }
 
@@ -1780,10 +1785,64 @@ function setDownloadVideo(videoUrl) {
   if (!videoUrl) {
     els.downloadVideoBtn.classList.add('hidden');
     els.downloadVideoBtn.removeAttribute('href');
+    els.saveToDriveBtn.classList.add('hidden');
     return;
   }
   els.downloadVideoBtn.href = videoUrl;
   els.downloadVideoBtn.classList.remove('hidden');
+  els.saveToDriveBtn.classList.toggle('hidden', !state.googleDriveEnabled);
+}
+
+const DRIVE_PENDING_SAVE_KEY = 'karaPendingDriveSaveLessonId';
+
+async function saveLessonToDrive(lessonId) {
+  if (!lessonId) return;
+  els.saveToDriveBtn.disabled = true;
+  const originalText = els.saveToDriveBtn.textContent;
+  els.saveToDriveBtn.textContent = 'Yükleniyor...';
+  try {
+    const data = await api(`/api/lessons/${encodeURIComponent(lessonId)}/save-to-drive`, {});
+    setStatus("Video Drive'a kaydedildi.");
+    if (data.webViewLink) {
+      window.open(data.webViewLink, '_blank', 'noopener');
+    }
+  } catch (error) {
+    if (error.details?.code === 'drive_not_connected') {
+      localStorage.setItem(DRIVE_PENDING_SAVE_KEY, lessonId);
+      setStatus('Google Drive bağlanıyor...');
+      try {
+        const connect = await apiGet('/api/auth/oauth/google-drive');
+        if (connect.url) {
+          window.location.assign(connect.url);
+          return;
+        }
+      } catch (connectError) {
+        localStorage.removeItem(DRIVE_PENDING_SAVE_KEY);
+        setStatus(connectError.message, true);
+      }
+    } else {
+      setStatus(error.message, true);
+    }
+  } finally {
+    els.saveToDriveBtn.disabled = false;
+    els.saveToDriveBtn.textContent = originalText;
+  }
+}
+
+async function completeDriveConnectIfNeeded(redirect) {
+  if (!redirect.isDriveConnect || !redirect.providerRefreshToken) return;
+  try {
+    await api('/api/auth/google-drive-token', { refresh_token: redirect.providerRefreshToken });
+    const pendingLessonId = localStorage.getItem(DRIVE_PENDING_SAVE_KEY);
+    localStorage.removeItem(DRIVE_PENDING_SAVE_KEY);
+    if (pendingLessonId) {
+      await saveLessonToDrive(pendingLessonId);
+    } else {
+      setStatus('Google Drive bağlandı.');
+    }
+  } catch (error) {
+    setStatus(`Google Drive bağlanamadı: ${error.message}`, true);
+  }
 }
 
 function resetLiveManimStream() {
@@ -1993,6 +2052,7 @@ async function loadConfig() {
   }
   const config = await response.json();
   state.auth.googleOAuthEnabled = Boolean(config.googleOAuthEnabled);
+  state.googleDriveEnabled = Boolean(config.googleDriveEnabled);
   els.configText.textContent = `${(config.llmProvider || 'LLM').toUpperCase()} | Plan ${config.planModel} | Kod ${config.codeModel} | ${config.targetVideoMinutes || 10} dk/${config.targetSegmentCount || 8} segment | TTS ${config.ttsProvider || 'TTS'} ${config.ttsVoice || 'yok'} | Manim ${config.manimQuality} | Font ${config.manimFont || 'varsayilan'}`;
   if (config.targetVideoMinutes && !els.targetMinutesInput.dataset.touched) {
     els.targetMinutesInput.value = config.targetVideoMinutes;
@@ -2041,6 +2101,7 @@ async function initAuth(config = {}) {
     state.auth.profile = data.profile || state.auth.profile;
     saveAuthSession(state.auth.session, state.auth.profile);
     showApp();
+    void completeDriveConnectIfNeeded(redirect);
   } catch {
     if (state.auth.session?.refresh_token) {
       try {
@@ -2764,6 +2825,7 @@ els.logoutBtn.addEventListener('click', () => {
 });
 
 els.karaLiveBtn.addEventListener('click', toggleKaraLive);
+els.saveToDriveBtn.addEventListener('click', () => saveLessonToDrive(state.lessonId));
 els.karaQuestionInput.addEventListener('input', updateKaraTimestamp);
 els.karaAskForm.addEventListener('submit', submitKaraQuestion);
 

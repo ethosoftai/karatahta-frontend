@@ -8,6 +8,7 @@ export function StudioView() {
         </div>
         <div className="studioActions">
           <a id="downloadVideoBtn" className="secondaryAction hidden" href="#" download>Videoyu indir</a>
+          <button id="saveToDriveBtn" className="secondaryAction hidden" type="button">Drive'a kaydet</button>
           <button id="generateFullBtn" className="primaryAction hidden" type="button" disabled>Tüm dersi üret</button>
           <button id="backHomeBtn" className="secondaryAction hidden" type="button">Yeni konu</button>
         </div>
