@@ -2161,6 +2161,7 @@ els.generatePlanBtn.addEventListener('click', async () => {
         student_level: els.levelInput.value,
         target_video_minutes: Number(els.targetMinutesInput.value || 10),
         target_segment_count: Number(els.targetSegmentsInput.value || 8),
+        duration_touched: Boolean(els.targetMinutesInput.dataset.touched || els.targetSegmentsInput.dataset.touched),
         prior_knowledge: els.priorInput.value,
         interrupt_question: els.interruptInput.value.trim() || null
       });
