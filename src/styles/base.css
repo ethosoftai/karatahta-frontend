@@ -894,6 +894,18 @@ p {
   display: block;
 }
 
+.liveMotionCanvasPreview {
+  display: none;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: #050505;
+  border: 0;
+}
+
+.liveMotionCanvasPreview.visible {
+  display: block;
+}
+
 #videoOutput.visible {
   display: block;
 }

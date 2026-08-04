@@ -14,7 +14,10 @@ export default defineConfig({
     proxy: {
       '/api': {
         target: 'https://karatahta-backend-production.up.railway.app',
-        changeOrigin: true
+        changeOrigin: true,
+        // needed for /api/kara-live and the Motion Canvas live-preview proxy
+        // (/api/jobs/:id/mc-preview), both of which tunnel a WebSocket.
+        ws: true
       },
       '/renders': {
         target: 'https://karatahta-backend-production.up.railway.app',

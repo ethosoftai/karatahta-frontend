@@ -84,6 +84,9 @@ const state = {
     handoffSeconds: 0,
     lastPlaybackSeconds: 0
   },
+  mcPreview: {
+    jobId: null
+  },
   developer: {
     lastJob: null,
     lastManifest: null,
@@ -189,6 +192,7 @@ const els = {
   videoLoadingPanel: document.querySelector('#videoLoadingPanel'),
   videoLoadingText: document.querySelector('#videoLoadingText'),
   liveManimVideo: document.querySelector('#liveManimVideo'),
+  liveMotionCanvasPreview: document.querySelector('#liveMotionCanvasPreview'),
   playerControls: document.querySelector('#playerControls'),
   playPauseBtn: document.querySelector('#playPauseBtn'),
   fullscreenBtn: document.querySelector('#fullscreenBtn'),
@@ -1935,6 +1939,25 @@ function resetLiveManimStream() {
     lastPlaybackSeconds: 0
   };
   els.liveManimVideo.classList.remove('visible');
+  resetMotionCanvasPreview();
+}
+
+// Live Motion Canvas preview (creator/QA view): a per-job Vite dev server,
+// proxied same-origin at /api/jobs/:id/mc-preview/, iframed in directly. Only
+// active when the backend has MC_PREVIEW_ENABLED=true and reports a job's
+// preview as ready via the SSE job stream (job.preview.ready).
+function updateMotionCanvasPreviewFromJob(job) {
+  if (!job.preview?.ready) return;
+  if (state.mcPreview.jobId === job.id) return;
+  state.mcPreview.jobId = job.id;
+  els.liveMotionCanvasPreview.src = apiUrl(`/api/jobs/${encodeURIComponent(job.id)}/mc-preview/`);
+  els.liveMotionCanvasPreview.classList.add('visible');
+}
+
+function resetMotionCanvasPreview() {
+  state.mcPreview.jobId = null;
+  els.liveMotionCanvasPreview.classList.remove('visible');
+  els.liveMotionCanvasPreview.removeAttribute('src');
 }
 
 function seekToGlobalTime(seconds) {
@@ -2464,6 +2487,7 @@ function applyFullVideoJobUpdate(job) {
   }
   updateStreamingPreparation(job);
   updateLiveManimFromJob(job);
+  updateMotionCanvasPreviewFromJob(job);
   updatePlayableSegments(job);
   maybeStartOrContinuePlayback();
   const liveManimRunning = state.liveManim.active && !els.liveManimVideo.ended;

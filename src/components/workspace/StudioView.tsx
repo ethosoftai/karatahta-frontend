@@ -40,6 +40,13 @@ export function StudioView() {
             <p id="videoLoadingText">Video yükleniyor...</p>
           </div>
           <video id="liveManimVideo" className="liveManimVideo" playsInline autoPlay crossOrigin="anonymous" />
+          <iframe
+            id="liveMotionCanvasPreview"
+            className="liveMotionCanvasPreview"
+            title="Canlı Motion Canvas önizlemesi"
+            sandbox="allow-scripts allow-same-origin"
+          />
+
           <video id="videoOutput" playsInline crossOrigin="anonymous" />
           <video id="preloadVideo" preload="auto" muted crossOrigin="anonymous" />
           <div id="playerControls" className="playerControls hidden">
