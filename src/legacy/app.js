@@ -193,6 +193,8 @@ const els = {
   videoLoadingText: document.querySelector('#videoLoadingText'),
   liveManimVideo: document.querySelector('#liveManimVideo'),
   liveMotionCanvasPreview: document.querySelector('#liveMotionCanvasPreview'),
+  liveStudioStatus: document.querySelector('#liveStudioStatus'),
+  liveStudioSegments: document.querySelector('#liveStudioSegments'),
   playerControls: document.querySelector('#playerControls'),
   playPauseBtn: document.querySelector('#playPauseBtn'),
   fullscreenBtn: document.querySelector('#fullscreenBtn'),
@@ -1942,10 +1944,11 @@ function resetLiveManimStream() {
   resetMotionCanvasPreview();
 }
 
-// Live Motion Canvas preview (creator/QA view): a per-job Vite dev server,
-// proxied same-origin at /api/jobs/:id/mc-preview/, iframed in directly. Only
-// active when the backend has MC_PREVIEW_ENABLED=true and reports a job's
-// preview as ready via the SSE job stream (job.preview.ready).
+// Live Motion Canvas preview: the lesson pipeline generates Motion Canvas
+// code per segment and pushes it to a per-job Vite dev server, proxied
+// same-origin at /api/jobs/:id/mc-preview/ and iframed in directly. This is
+// now the primary generation view (there is no video render step), driven
+// entirely by the SSE job stream (job.preview.ready / job.segments).
 function updateMotionCanvasPreviewFromJob(job) {
   if (!job.preview?.ready) return;
   if (state.mcPreview.jobId === job.id) return;
@@ -1958,6 +1961,31 @@ function resetMotionCanvasPreview() {
   state.mcPreview.jobId = null;
   els.liveMotionCanvasPreview.classList.remove('visible');
   els.liveMotionCanvasPreview.removeAttribute('src');
+  if (els.liveStudioStatus) els.liveStudioStatus.textContent = 'Hazırlanıyor...';
+  if (els.liveStudioSegments) els.liveStudioSegments.innerHTML = '';
+}
+
+function updateLiveStudioStatus(job) {
+  if (!els.liveStudioStatus) return;
+  els.liveStudioStatus.textContent = job.status === 'done'
+    ? 'Tüm bölümler canlı önizlemede hazır.'
+    : job.status === 'failed'
+      ? (job.error || 'Üretim başarısız oldu.')
+      : (job.current || job.message || 'Hazırlanıyor...');
+}
+
+function renderLiveStudioSegments(job) {
+  if (!els.liveStudioSegments) return;
+  const segments = job.segments || [];
+  els.liveStudioSegments.innerHTML = segments.map((segment) => {
+    const statusClass = segment.status === 'done'
+      ? 'done'
+      : segment.status === 'failed'
+        ? 'failed'
+        : (job.preview?.segmentId === segment.id ? 'active' : '');
+    const label = segment.title || segment.id;
+    return `<span class="liveStudioSegmentChip ${statusClass}">${escapeHtml(label)}</span>`;
+  }).join('');
 }
 
 function seekToGlobalTime(seconds) {
@@ -2488,6 +2516,8 @@ function applyFullVideoJobUpdate(job) {
   updateStreamingPreparation(job);
   updateLiveManimFromJob(job);
   updateMotionCanvasPreviewFromJob(job);
+  updateLiveStudioStatus(job);
+  renderLiveStudioSegments(job);
   updatePlayableSegments(job);
   maybeStartOrContinuePlayback();
   const liveManimRunning = state.liveManim.active && !els.liveManimVideo.ended;

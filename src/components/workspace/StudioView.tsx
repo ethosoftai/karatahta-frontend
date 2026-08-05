@@ -16,6 +16,25 @@ export function StudioView() {
 
       <section className="watchPanel">
         <div className="videoShell">
+          <div id="liveStudioPanel" className="liveStudioPanel">
+            <div className="liveStudioHeader">
+              <span className="liveStudioDot" aria-hidden="true" />
+              <span id="liveStudioStatus">Hazırlanıyor...</span>
+            </div>
+            <iframe
+              id="liveMotionCanvasPreview"
+              className="liveMotionCanvasPreview"
+              title="Canlı Motion Canvas önizlemesi"
+              sandbox="allow-scripts allow-same-origin"
+            />
+            <div id="liveStudioSegments" className="liveStudioSegments" aria-label="Bölüm durumu" />
+          </div>
+
+          {/* Legacy render-pipeline elements: no longer part of the visible
+              flow (the app no longer renders segments to video before
+              showing them, see StudioView README note), kept only because
+              legacy/app.js and legacy/progressiveManimPlayer.js still
+              reference their ids. Force-hidden via CSS (see base.css). */}
           <div id="liveStreamBadge" className="liveStreamBadge hidden" aria-live="polite">
             <span aria-hidden="true" />
             <strong>CANLI ÜRETİM</strong>
@@ -40,13 +59,6 @@ export function StudioView() {
             <p id="videoLoadingText">Video yükleniyor...</p>
           </div>
           <video id="liveManimVideo" className="liveManimVideo" playsInline autoPlay crossOrigin="anonymous" />
-          <iframe
-            id="liveMotionCanvasPreview"
-            className="liveMotionCanvasPreview"
-            title="Canlı Motion Canvas önizlemesi"
-            sandbox="allow-scripts allow-same-origin"
-          />
-
           <video id="videoOutput" playsInline crossOrigin="anonymous" />
           <video id="preloadVideo" preload="auto" muted crossOrigin="anonymous" />
           <div id="playerControls" className="playerControls hidden">

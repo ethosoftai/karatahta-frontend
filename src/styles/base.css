@@ -792,6 +792,87 @@ p {
   background: #050505;
 }
 
+/* Legacy render-pipeline UI (progressive video / mp4 player chrome). The app
+   no longer renders segments to video before showing them -- generation IS
+   the live preview now -- but legacy/app.js and progressiveManimPlayer.js
+   still reference these ids, so they stay in the DOM rather than risk null
+   references. Force-hidden regardless of whatever classes JS toggles on
+   them. See .liveStudioPanel below for the UI that replaced these. */
+#liveStreamBadge,
+#preparingPanel,
+#videoLoadingPanel,
+#liveManimVideo,
+#videoOutput,
+#preloadVideo,
+#playerControls,
+#videoOverlay {
+  display: none !important;
+}
+
+.liveStudioPanel {
+  position: relative;
+  width: 100%;
+  min-height: clamp(360px, 58vh, 680px);
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 12px;
+  padding: 16px;
+  background: #050505;
+}
+
+.liveStudioHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.liveStudioDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #4ade80;
+  box-shadow: 0 0 0 4px rgba(74, 222, 128, 0.15);
+  flex-shrink: 0;
+}
+
+.liveStudioSegments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.liveStudioSegmentChip {
+  padding: 6px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.03);
+  transition: border-color 180ms ease, background 180ms ease, color 180ms ease;
+}
+
+.liveStudioSegmentChip.active {
+  border-color: color-mix(in srgb, var(--primary) 58%, transparent);
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+  color: #fff;
+}
+
+.liveStudioSegmentChip.done {
+  border-color: rgba(74, 222, 128, 0.34);
+  background: rgba(74, 222, 128, 0.08);
+  color: #bbf7d0;
+}
+
+.liveStudioSegmentChip.failed {
+  border-color: rgba(248, 113, 113, 0.4);
+  background: rgba(248, 113, 113, 0.08);
+  color: #fecaca;
+}
+
 .preparingPanel {
   position: relative;
   z-index: 1;
