@@ -85,7 +85,8 @@ const state = {
     lastPlaybackSeconds: 0
   },
   mcPreview: {
-    jobId: null
+    jobId: null,
+    segmentId: null
   },
   developer: {
     lastJob: null,
@@ -1951,14 +1952,24 @@ function resetLiveManimStream() {
 // entirely by the SSE job stream (job.preview.ready / job.segments).
 function updateMotionCanvasPreviewFromJob(job) {
   if (!job.preview?.ready) return;
-  if (state.mcPreview.jobId === job.id) return;
+  const segmentId = job.preview.segmentId;
+  if (state.mcPreview.jobId === job.id && state.mcPreview.segmentId === segmentId) return;
+  // Motion Canvas's own in-iframe HMR keeps the scene module technically up
+  // to date when updateScene() overwrites the file, but the already-running
+  // player doesn't reliably notice a new segment boundary -- it just keeps
+  // looping whatever it loaded first. Forcing a fresh navigation (cache-bust
+  // query param, since re-assigning the identical src is a no-op in
+  // browsers) reconstructs the player from scratch against the current
+  // segment's code, every time the segment changes, not just on first load.
   state.mcPreview.jobId = job.id;
-  els.liveMotionCanvasPreview.src = apiUrl(`/api/jobs/${encodeURIComponent(job.id)}/mc-preview/`);
+  state.mcPreview.segmentId = segmentId;
+  els.liveMotionCanvasPreview.src = apiUrl(`/api/jobs/${encodeURIComponent(job.id)}/mc-preview/?s=${encodeURIComponent(segmentId || '')}&t=${Date.now()}`);
   els.liveMotionCanvasPreview.classList.add('visible');
 }
 
 function resetMotionCanvasPreview() {
   state.mcPreview.jobId = null;
+  state.mcPreview.segmentId = null;
   els.liveMotionCanvasPreview.classList.remove('visible');
   els.liveMotionCanvasPreview.removeAttribute('src');
   if (els.liveStudioStatus) els.liveStudioStatus.textContent = 'Hazırlanıyor...';
