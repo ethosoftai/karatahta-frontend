@@ -9,6 +9,18 @@ export function Workspace() {
       <main className="mainPane">
         <HomeView />
         <StudioView />
+        <section className="placeholderView hidden" id="cardView">
+          <div className="placeholderViewBody">
+            <h2>Kart</h2>
+            <p>Bu bölüm yakında hazır olacak.</p>
+          </div>
+        </section>
+        <section className="placeholderView hidden" id="liveTeacherView">
+          <div className="placeholderViewBody">
+            <h2>Canlı öğretmen</h2>
+            <p>Bu bölüm yakında hazır olacak.</p>
+          </div>
+        </section>
       </main>
       <div id="workspaceLoading" className="workspaceLoading hidden" role="status" aria-live="polite">
         <div className="workspaceLoadingCard">

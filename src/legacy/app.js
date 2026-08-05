@@ -56,6 +56,11 @@ const state = {
     mode: 'login',
     googleOAuthEnabled: false
   },
+  activeSection: 'karatahta',
+  // Kart ve Canlı öğretmen bölümlerinin kendi backend'i/geçmişi henüz yok;
+  // ileride gerçek veriyle doldurulacak yer tutucu listeler.
+  cardChat: [],
+  liveTeacherChat: [],
   lessons: [],
   lessonSearch: '',
   plan: null,
@@ -145,9 +150,15 @@ const els = {
   userEmailText: document.querySelector('#userEmailText'),
   logoutBtn: document.querySelector('#logoutBtn'),
   logoHomeBtn: document.querySelector('#logoHomeBtn'),
+  cardNavBtn: document.querySelector('#cardNavBtn'),
+  liveTeacherNavBtn: document.querySelector('#liveTeacherNavBtn'),
+  karatahtaNavBtn: document.querySelector('#karatahtaNavBtn'),
+  sidebarSectionLabel: document.querySelector('#sidebarSectionLabel'),
   historyList: document.querySelector('.historyList'),
   homeView: document.querySelector('#homeView'),
   studioView: document.querySelector('#studioView'),
+  cardView: document.querySelector('#cardView'),
+  liveTeacherView: document.querySelector('#liveTeacherView'),
   configText: document.querySelector('#configText'),
   statusText: document.querySelector('#statusText'),
   topicInput: document.querySelector('#topicInput'),
@@ -511,14 +522,31 @@ function liveProductionText(job) {
   return `İlk segment planlanıyor · plan 0/${total || '?'}`;
 }
 
-function showStudio() {
+function hideAllMainViews() {
   els.homeView.classList.add('hidden');
+  els.studioView.classList.add('hidden');
+  els.cardView.classList.add('hidden');
+  els.liveTeacherView.classList.add('hidden');
+}
+
+function showStudio() {
+  hideAllMainViews();
   els.studioView.classList.remove('hidden');
 }
 
 function showHome() {
-  els.studioView.classList.add('hidden');
+  hideAllMainViews();
   els.homeView.classList.remove('hidden');
+}
+
+function showCard() {
+  hideAllMainViews();
+  els.cardView.classList.remove('hidden');
+}
+
+function showLiveTeacher() {
+  hideAllMainViews();
+  els.liveTeacherView.classList.remove('hidden');
 }
 
 function setActiveChip(groupSelector, activeButton) {
@@ -743,6 +771,7 @@ function beginNewLesson() {
 }
 
 function renderLessonHistory() {
+  if (state.activeSection !== 'karatahta') return;
   const lessons = state.lessons || [];
   const query = state.lessonSearch.trim().toLowerCase();
   const visibleLessons = query
@@ -769,6 +798,42 @@ function renderLessonHistory() {
       </div>
     `).join('')}
   `;
+}
+
+const SECTION_META = {
+  karatahta: { label: 'ÇALIŞMA ALANI', emptyText: null },
+  card: { label: 'KART GEÇMİŞİ', emptyText: 'Henüz geçmiş yok.' },
+  liveTeacher: { label: 'CANLI ÖĞRETMEN GEÇMİŞİ', emptyText: 'Henüz geçmiş yok.' }
+};
+
+function updateSectionNav() {
+  els.karatahtaNavBtn.classList.toggle('active', state.activeSection === 'karatahta');
+  els.cardNavBtn.classList.toggle('active', state.activeSection === 'card');
+  els.liveTeacherNavBtn.classList.toggle('active', state.activeSection === 'liveTeacher');
+}
+
+function renderSectionHistory() {
+  const meta = SECTION_META[state.activeSection] || SECTION_META.karatahta;
+  els.sidebarSectionLabel.textContent = meta.label;
+  if (state.activeSection === 'karatahta') {
+    renderLessonHistory();
+    return;
+  }
+  els.historyList.innerHTML = `<p class="historyEmpty">${escapeHtml(meta.emptyText || '')}</p>`;
+}
+
+function setActiveSection(section) {
+  if (state.activeSection === section) return;
+  state.activeSection = section;
+  updateSectionNav();
+  renderSectionHistory();
+  if (section === 'card') {
+    showCard();
+  } else if (section === 'liveTeacher') {
+    showLiveTeacher();
+  } else {
+    state.lessonId ? showStudio() : showHome();
+  }
 }
 
 async function refreshLessonHistory() {
@@ -2893,7 +2958,24 @@ els.historyList.addEventListener('click', (event) => {
   }
 });
 
-els.logoHomeBtn.addEventListener('click', beginNewLesson);
+els.logoHomeBtn.addEventListener('click', () => {
+  if (state.activeSection !== 'karatahta') {
+    state.activeSection = 'karatahta';
+    updateSectionNav();
+    renderSectionHistory();
+  }
+  beginNewLesson();
+});
+els.karatahtaNavBtn.addEventListener('click', () => {
+  if (state.activeSection !== 'karatahta') {
+    state.activeSection = 'karatahta';
+    updateSectionNav();
+    renderSectionHistory();
+    state.lessonId ? showStudio() : showHome();
+  }
+});
+els.cardNavBtn.addEventListener('click', () => setActiveSection('card'));
+els.liveTeacherNavBtn.addEventListener('click', () => setActiveSection('liveTeacher'));
 
 els.historyList.addEventListener('input', (event) => {
   if (event.target?.id !== 'lessonSearchInput') {

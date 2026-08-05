@@ -185,6 +185,11 @@ p {
   display: none;
 }
 
+.sidebarQuickNav {
+  display: grid;
+  gap: 4px;
+}
+
 .historyList {
   min-height: 0;
   overflow: auto;
@@ -557,6 +562,19 @@ p {
   justify-content: center;
   gap: 28px;
   padding: 48px 24px;
+}
+
+.placeholderView {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+}
+
+.placeholderViewBody {
+  max-width: 480px;
+  text-align: center;
 }
 
 .heroCopy {

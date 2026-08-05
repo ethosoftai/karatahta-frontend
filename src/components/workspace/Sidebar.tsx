@@ -8,8 +8,26 @@ export function Sidebar() {
         <p id="configText" className="hidden">Gemini + Manim</p>
       </div>
 
-      <div className="sidebarLabel">ÇALIŞMA ALANI</div>
-      <nav className="historyList" aria-label="Ders geçmişi">
+      <nav className="sidebarQuickNav" aria-label="Bölümler">
+        <button id="karatahtaNavBtn" className="historyItem active" type="button">
+          <span className="historyText">
+            <strong>Karatahta</strong>
+          </span>
+        </button>
+        <button id="cardNavBtn" className="historyItem" type="button">
+          <span className="historyText">
+            <strong>Kart</strong>
+          </span>
+        </button>
+        <button id="liveTeacherNavBtn" className="historyItem" type="button">
+          <span className="historyText">
+            <strong>Canlı öğretmen</strong>
+          </span>
+        </button>
+      </nav>
+
+      <div className="sidebarLabel" id="sidebarSectionLabel">ÇALIŞMA ALANI</div>
+      <nav className="historyList" aria-label="Bölüm geçmişi">
         <button className="historyItem active" type="button">
           <span className="historyText">
             <strong>Yeni ders</strong>
