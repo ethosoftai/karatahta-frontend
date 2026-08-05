@@ -8,9 +8,16 @@ repo yalnız frontend'i içerir; üretim API'si ayrı bir Railway servisinde
 
 | Parça | Adres / repo |
 | --- | --- |
-| Frontend | `https://karatahta.ethosoft.org` |
+| Frontend (güncel/birincil) | `https://karatahta-frontend.ahmetrifatozturk09.workers.dev` (Cloudflare Workers) |
+| Frontend (legacy) | `https://karatahta.ethosoft.org` (Hazalhost/cPanel; Google OAuth artık buraya dönmüyor) |
 | Railway backend | `https://karatahta-backend-production.up.railway.app` |
 | VPS backend | `https://api.karatahta.ethosoft.org` |
+
+Cloudflare Workers deployment'ının build/deploy mekanizması bu repo içinde
+değil (repoda `wrangler.toml` yok) — ayrı bir Cloudflare hesabından
+yönetiliyor. Hangi branch'i izlediği doğrulanmadı; o Cloudflare projesine
+erişimi olan kişiye sorun. Aşağıdaki "Hazalhost/cPanel deployment" bölümü
+yalnız legacy `karatahta.ethosoft.org` dağıtımı için geçerlidir.
 
 Developer portalda backend altyapısı tarayıcı bazında seçilebilir:
 
@@ -24,9 +31,9 @@ Developer portalda backend altyapısı tarayıcı bazında seçilebilir:
 Railway adresi `VITE_API_BASE_URL`, VPS adresi ise isteğe bağlı
 `VITE_VPS_API_BASE_URL` build değişkeniyle ezilebilir.
 | Backend API | `https://karatahta-backend-production.up.railway.app` |
-| Frontend repo | `https://github.com/ethosoftai/karatahta-frontend` (`main`) |
-| Backend repo | `https://github.com/ethosoftai/karatahta-backend` (`railway`) |
-| Frontend hosting | Hazalhost cPanel |
+| Frontend repo | `https://github.com/ethosoftai/karatahta-frontend` (çalışma branch'i: `checkpoint-9`) |
+| Backend repo | `https://github.com/ethosoftai/karatahta-backend` (deploy branch'i değişken -- `railway status --json` ile doğrula, bkz. backend README) |
+| Frontend hosting | Cloudflare Workers (güncel) + Hazalhost cPanel (legacy) |
 | Backend hosting | Railway |
 | Auth ve ilişkisel veri | Supabase |
 | Kalıcı video/ses/ek dosyaları | Private Railway Bucket |
@@ -160,7 +167,11 @@ git diff --check
 `npm run build`, cPanel'in yayınlayacağı `dist/` klasörünü yeniler. Bu repoda
 `dist/` bilinçli olarak Git tarafından takip edilir.
 
-## Hazalhost/cPanel deployment — önemli
+## Hazalhost/cPanel deployment — önemli (legacy)
+
+Bu bölüm yalnız `karatahta.ethosoft.org` legacy dağıtımı içindir. Güncel/
+birincil frontend olan Cloudflare Workers deployment'ı bu repodan farklı bir
+mekanizma kullanır (yukarıdaki tabloya bakın) ve bu adımlarla ilgisi yoktur.
 
 `.cpanel.yml` **npm install veya Vite build çalıştırmaz**. Yalnız repoda hazır
 bulunan `dist/` içeriğini şu yayın dizinine kopyalar:
@@ -212,19 +223,24 @@ commitlenmelidir.
 
 API response, auth, SSE veya progressive manifest sözleşmesi değiştiğinde:
 
-1. Backend değişikliğini `ethosoftai/karatahta-backend` reposunun `railway`
-   branch'ine commit/push et.
+1. Backend değişikliğini `ethosoftai/karatahta-backend` reposunun **Railway'in
+   o an gerçekten deploy ettiği branch'ine** commit/push et (`railway status
+   --json` ile doğrula — sabit bir branch adı varsayma, bkz. backend README).
 2. Railway deployment'ın aynı commit ile başarılı olduğunu doğrula.
-3. Gerekli frontend uyarlamasını bu repoda yap.
-4. Frontend test/build sonrası kaynaklarla birlikte `dist/`yi commit et.
-5. `main` branch'ini pushla.
-6. cPanel'de **Update from Remote**, sonra **Deploy HEAD Commit** yap.
+3. Gerekli frontend uyarlamasını bu repoda yap (çalışma branch'i:
+   `checkpoint-9`).
+4. Cloudflare Workers deployment'ı bu repodan ayrı yönetiliyor; oraya nasıl
+   yayınlanacağını (hangi branch, otomatik mi manuel mi) sahibinden doğrula.
+5. Yalnız legacy cPanel arayüzünü de güncellemek gerekiyorsa: frontend test/
+   build sonrası kaynaklarla birlikte `dist/`yi commit et, `main` branch'ini
+   pushla, cPanel'de **Update from Remote** sonra **Deploy HEAD Commit** yap.
 
-Backend'in CORS listesinde hem production origin'i hem gerekli local
-origin'ler bulunmalıdır:
+Backend'in CORS listesinde production origin'lerinin (hem Cloudflare Workers
+hem legacy cPanel) ve gerekli local origin'lerin bulunması gerekir —
+production'daki güncel değeri `railway variables` ile doğrulayın:
 
 ```env
-CORS_ORIGIN=https://karatahta.ethosoft.org,http://localhost:3001,http://127.0.0.1:3001
+CORS_ORIGIN=https://karatahta.ethosoft.org,http://localhost:3001,http://127.0.0.1:3001,https://karatahta-frontend.ahmetrifatozturk09.workers.dev
 ```
 
 ## Hızlı sorun giderme
@@ -240,11 +256,21 @@ CORS_ORIGIN=https://karatahta.ethosoft.org,http://localhost:3001,http://127.0.0.
   `/api/lessons/:id/video-url` yanıtını kontrol et.
 - Login sürekli dönüyor: backend auth ayarları, Supabase redirect URL'leri ve
   session refresh isteğini kontrol et.
+- Google OAuth yanlış frontend'e (ör. eski cPanel domaine) dönüyor: backend'in
+  `AUTH_REDIRECT_URL`'i tek bir sabit URL'dir, isteği yapan origin'e göre
+  değişmez — hangi frontend hedeflenmişse o backend'de ayarlı olmalı. Ayrıca
+  Supabase projesinin **Authentication → URL Configuration → Redirect URLs**
+  allowlist'inde de aynı URL bulunmalıdır; yoksa Supabase `redirectTo`'yu yok
+  sayıp kendi Site URL varsayılanına döner.
 
 ## Sonraki geliştirici/LLM için teslim kontrol listesi
 
 - İşe başlamadan `git status -sb`, `git remote -v` ve son commitleri kontrol et.
+- Hangi frontend deployment'ının hedeflendiğini netleştir (Cloudflare Workers
+  mi, legacy cPanel mi) -- ikisinin build/deploy mekanizması farklı.
 - Backend sözleşmesini varsayma; `/api/config` ve ilgili endpoint kodunu oku.
+  Backend'in hangi branch'ten deploy edildiğini de varsayma -- `railway
+  status --json` ile doğrula (backend README'ye bakın).
 - React bileşen ID'leri ile `legacy/app.js` seçicilerini birlikte değiştir.
 - Progressive oynatmayı kaldırırken final-video fallback'ini bozma.
 - Secret veya bucket credential'ını frontend'e ekleme.
