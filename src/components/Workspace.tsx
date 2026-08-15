@@ -1,7 +1,6 @@
 import { CardsView } from './workspace/CardsView';
 import { HomeView } from './workspace/HomeView';
 import { KatalogView } from './workspace/KatalogView';
-import { LiveTeacherView } from './workspace/LiveTeacherView';
 import { Sidebar } from './workspace/Sidebar';
 import { StudioView } from './workspace/StudioView';
 
@@ -13,7 +12,6 @@ export function Workspace() {
         <HomeView />
         <StudioView />
         <CardsView />
-        <LiveTeacherView />
         <KatalogView />
       </main>
       <div id="workspaceLoading" className="workspaceLoading hidden" role="status" aria-live="polite">

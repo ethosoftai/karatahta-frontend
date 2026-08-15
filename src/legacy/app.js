@@ -57,10 +57,9 @@ const state = {
     googleOAuthEnabled: false
   },
   activeSection: 'karatahta',
-  // Kart ve Canlı öğretmen bölümlerinin kendi backend'i/geçmişi henüz yok;
-  // ileride gerçek veriyle doldurulacak yer tutucu listeler.
+  // Kart bölümünün kendi backend'i/geçmişi henüz yok; ileride gerçek
+  // veriyle doldurulacak yer tutucu liste.
   cardChat: [],
-  liveTeacherChat: [],
   lessons: [],
   lessonSearch: '',
   plan: null,
@@ -155,7 +154,6 @@ const els = {
   logoutBtn: document.querySelector('#logoutBtn'),
   logoHomeBtn: document.querySelector('#logoHomeBtn'),
   cardNavBtn: document.querySelector('#cardNavBtn'),
-  liveTeacherNavBtn: document.querySelector('#liveTeacherNavBtn'),
   katalogNavBtn: document.querySelector('#katalogNavBtn'),
   karatahtaNavBtn: document.querySelector('#karatahtaNavBtn'),
   sidebarSectionLabel: document.querySelector('#sidebarSectionLabel'),
@@ -163,7 +161,6 @@ const els = {
   homeView: document.querySelector('#homeView'),
   studioView: document.querySelector('#studioView'),
   cardView: document.querySelector('#cardView'),
-  liveTeacherView: document.querySelector('#liveTeacherView'),
   katalogView: document.querySelector('#katalogView'),
   configText: document.querySelector('#configText'),
   statusText: document.querySelector('#statusText'),
@@ -532,7 +529,6 @@ function hideAllMainViews() {
   els.homeView.classList.add('hidden');
   els.studioView.classList.add('hidden');
   els.cardView.classList.add('hidden');
-  els.liveTeacherView.classList.add('hidden');
   els.katalogView.classList.add('hidden');
 }
 
@@ -549,11 +545,6 @@ function showHome() {
 function showCard() {
   hideAllMainViews();
   els.cardView.classList.remove('hidden');
-}
-
-function showLiveTeacher() {
-  hideAllMainViews();
-  els.liveTeacherView.classList.remove('hidden');
 }
 
 function showKatalog() {
@@ -815,14 +806,12 @@ function renderLessonHistory() {
 const SECTION_META = {
   karatahta: { label: 'ÇALIŞMA ALANI', emptyText: null },
   card: { label: 'KART GEÇMİŞİ', emptyText: 'Henüz geçmiş yok.' },
-  liveTeacher: { label: 'CANLI ÖĞRETMEN GEÇMİŞİ', emptyText: 'Henüz geçmiş yok.' },
   katalog: { label: 'KATALOG', emptyText: 'Henüz geçmiş yok.' }
 };
 
 function updateSectionNav() {
   els.karatahtaNavBtn.classList.toggle('active', state.activeSection === 'karatahta');
   els.cardNavBtn.classList.toggle('active', state.activeSection === 'card');
-  els.liveTeacherNavBtn.classList.toggle('active', state.activeSection === 'liveTeacher');
   els.katalogNavBtn.classList.toggle('active', state.activeSection === 'katalog');
 }
 
@@ -843,8 +832,6 @@ function setActiveSection(section) {
   renderSectionHistory();
   if (section === 'card') {
     showCard();
-  } else if (section === 'liveTeacher') {
-    showLiveTeacher();
   } else if (section === 'katalog') {
     showKatalog();
   } else {
@@ -2991,7 +2978,6 @@ els.karatahtaNavBtn.addEventListener('click', () => {
   }
 });
 els.cardNavBtn.addEventListener('click', () => setActiveSection('card'));
-els.liveTeacherNavBtn.addEventListener('click', () => setActiveSection('liveTeacher'));
 els.katalogNavBtn.addEventListener('click', () => setActiveSection('katalog'));
 
 els.historyList.addEventListener('input', (event) => {

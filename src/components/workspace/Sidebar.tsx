@@ -19,11 +19,6 @@ export function Sidebar() {
             <strong>Kart</strong>
           </span>
         </button>
-        <button id="liveTeacherNavBtn" className="historyItem" type="button">
-          <span className="historyText">
-            <strong>Canlı öğretmen</strong>
-          </span>
-        </button>
         <button id="katalogNavBtn" className="historyItem" type="button">
           <span className="historyText">
             <strong>Katalog</strong>

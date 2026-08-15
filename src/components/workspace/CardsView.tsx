@@ -1,7 +1,11 @@
-import { useState } from 'react';
+import { useState, type ChangeEvent } from 'react';
 
 type Card = { index: number; title: string; explanation: string; imageDataUrl: string };
-type FeedItem = { kind: 'user'; text: string } | { kind: 'card'; card: Card };
+type ChatTurn = { role: 'user' | 'assistant'; content: string };
+type FeedItem =
+  | { kind: 'user'; text: string }
+  | { kind: 'card'; card: Card }
+  | { kind: 'assistant'; text: string };
 
 async function* readNdjson(response: Response) {
   const reader = response.body?.getReader();
@@ -21,10 +25,22 @@ async function* readNdjson(response: Response) {
   if (buffer.trim()) yield JSON.parse(buffer);
 }
 
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(new Error('Fotoğraf okunamadı.'));
+    reader.readAsDataURL(file);
+  });
+}
+
 function exportFeed(feed: FeedItem[]) {
   const body = feed.map((item) => {
     if (item.kind === 'user') {
       return `<p><strong>Soru:</strong> ${item.text}</p>`;
+    }
+    if (item.kind === 'assistant') {
+      return `<p><strong>Öğretmen:</strong> ${item.text}</p>`;
     }
     return `<div style="margin:16px 0"><h3>${item.card.title}</h3>
       <img src="${item.card.imageDataUrl}" style="max-width:480px;display:block;border-radius:8px" />
@@ -43,37 +59,98 @@ function exportFeed(feed: FeedItem[]) {
 
 export function CardsView() {
   const [prompt, setPrompt] = useState('');
+  const [questionImage, setQuestionImage] = useState<File | null>(null);
   const [feed, setFeed] = useState<FeedItem[]>([]);
+  const [cards, setCards] = useState<Card[]>([]);
+  const [chatHistory, setChatHistory] = useState<ChatTurn[]>([]);
+  const [cardsReady, setCardsReady] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function send() {
-    const text = prompt.trim();
-    if (!text || busy) return;
-    setBusy(true);
-    setError(null);
-    setPrompt('');
-    setFeed((prev) => [...prev, { kind: 'user', text }]);
+  function apiBase() {
+    return (window as { KARA_API_BASE_URL?: string }).KARA_API_BASE_URL || '';
+  }
+
+  // First message: generates the card sequence. Accepts a typed topic/
+  // question and/or a question photo (transcribed to text on the backend).
+  async function generate(text: string, imageFile: File | null) {
+    setFeed((prev) => [...prev, { kind: 'user', text: text || '(fotoğraftan soru)' }]);
     try {
-      const base = (window as { KARA_API_BASE_URL?: string }).KARA_API_BASE_URL || '';
-      const response = await fetch(`${base}/api/cards/generate`, {
+      const body: Record<string, unknown> = {};
+      if (text) body.prompt = text;
+      if (imageFile) {
+        body.question_image = { mimeType: imageFile.type, data: await readFileAsDataUrl(imageFile) };
+      }
+      const response = await fetch(`${apiBase()}/api/cards/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: text })
+        body: JSON.stringify(body)
       });
       if (!response.ok) throw new Error(`Sunucu hatasi (${response.status})`);
+      const batch: Card[] = [];
       for await (const event of readNdjson(response)) {
         if (event.type === 'card') {
-          setFeed((prev) => [...prev, { kind: 'card', card: event.card as Card }]);
+          const card = event.card as Card;
+          batch.push(card);
+          setFeed((prev) => [...prev, { kind: 'card', card }]);
         } else if (event.type === 'error') {
           setError(event.message);
         }
       }
+      if (batch.length) {
+        setCards((prev) => [...prev, ...batch]);
+        setCardsReady(true);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Bilinmeyen hata');
-    } finally {
-      setBusy(false);
     }
+  }
+
+  // Follow-up messages once cards are on screen: a normal chat turn about
+  // the cards just shown, same shape as ask-kara (question + history in,
+  // answer text out) -- no new cards are generated here.
+  async function askFollowUp(text: string) {
+    setFeed((prev) => [...prev, { kind: 'user', text }]);
+    const nextHistory = [...chatHistory, { role: 'user' as const, content: text }];
+    setChatHistory(nextHistory);
+    try {
+      const response = await fetch(`${apiBase()}/api/cards/ask`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question: text, cards, history: nextHistory })
+      });
+      if (!response.ok) throw new Error(`Sunucu hatasi (${response.status})`);
+      const data: { answer: string } = await response.json();
+      setFeed((prev) => [...prev, { kind: 'assistant', text: data.answer }]);
+      setChatHistory((prev) => [...prev, { role: 'assistant', content: data.answer }]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Bilinmeyen hata');
+    }
+  }
+
+  async function send() {
+    const text = prompt.trim();
+    if ((!text && !questionImage) || busy) return;
+    setBusy(true);
+    setError(null);
+    setPrompt('');
+    const imageFile = questionImage;
+    setQuestionImage(null);
+    if (cardsReady) {
+      if (text) await askFollowUp(text);
+    } else {
+      await generate(text, imageFile);
+    }
+    setBusy(false);
+  }
+
+  function onPickImage(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0] || null;
+    if (file && !file.type.startsWith('image/')) {
+      setError('Lütfen bir fotoğraf dosyası seçin.');
+      return;
+    }
+    setQuestionImage(file);
   }
 
   return (
@@ -93,40 +170,74 @@ export function CardsView() {
         <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 14, padding: '8px 0' }}>
           {feed.length === 0 && (
             <p style={{ color: 'var(--muted)', fontSize: 14 }}>
-              Bir soru veya konu yaz, örn. &quot;ikinci dereceden denklemi çöz: x²-5x+6=0&quot; — kartlar sırayla üretilsin.
+              Bir soru veya konu yaz, örn. &quot;ikinci dereceden denklemi çöz: x²-5x+6=0&quot; — kartlar sırayla
+              üretilsin. İstersen soru metni yerine bir soru fotoğrafı da ekleyebilirsin.
             </p>
           )}
-          {feed.map((item, i) => item.kind === 'user' ? (
-            <div key={i} style={{
-              alignSelf: 'flex-end', background: 'var(--primary)', color: 'var(--primary-text)',
-              padding: '8px 12px', borderRadius: 10, maxWidth: '85%', fontSize: 14
-            }}
-            >
-              {item.text}
-            </div>
-          ) : (
-            <div key={i} style={{
-              background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12,
-              overflow: 'hidden'
-            }}
-            >
-              <img src={item.card.imageDataUrl} alt={item.card.title} style={{ width: '100%', display: 'block' }} />
-              <div style={{ padding: 12 }}>
-                <div style={{ fontWeight: 600, marginBottom: 4 }}>{item.card.title}</div>
-                <div style={{ fontSize: 14, color: 'var(--muted)', lineHeight: 1.5 }}>{item.card.explanation}</div>
+          {feed.map((item, i) => {
+            if (item.kind === 'user') {
+              return (
+                <div key={i} style={{
+                  alignSelf: 'flex-end', background: 'var(--primary)', color: 'var(--primary-text)',
+                  padding: '8px 12px', borderRadius: 10, maxWidth: '85%', fontSize: 14
+                }}
+                >
+                  {item.text}
+                </div>
+              );
+            }
+            if (item.kind === 'assistant') {
+              return (
+                <div key={i} style={{
+                  alignSelf: 'flex-start', background: 'var(--surface-2)', color: 'var(--text)',
+                  padding: '8px 12px', borderRadius: 10, maxWidth: '90%', fontSize: 14, lineHeight: 1.4
+                }}
+                >
+                  {item.text}
+                </div>
+              );
+            }
+            return (
+              <div key={i} style={{
+                background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12,
+                overflow: 'hidden'
+              }}
+              >
+                <img src={item.card.imageDataUrl} alt={item.card.title} style={{ width: '100%', display: 'block' }} />
+                <div style={{ padding: 12 }}>
+                  <div style={{ fontWeight: 600, marginBottom: 4 }}>{item.card.title}</div>
+                  <div style={{ fontSize: 14, color: 'var(--muted)', lineHeight: 1.5 }}>{item.card.explanation}</div>
+                </div>
               </div>
-            </div>
-          ))}
-          {busy && <div style={{ color: 'var(--muted)', fontSize: 13 }}>Kart üretiliyor…</div>}
+            );
+          })}
+          {busy && <div style={{ color: 'var(--muted)', fontSize: 13 }}>{cardsReady ? 'Cevap yazılıyor…' : 'Kart üretiliyor…'}</div>}
           {error && <div style={{ color: '#f87171', fontSize: 13 }}>{error}</div>}
         </div>
+
+        {!cardsReady && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, fontSize: 13, color: 'var(--muted)' }}>
+            <label className="iconTextButton" style={{ cursor: 'pointer' }}>
+              Soru fotoğrafı ekle
+              <input type="file" accept="image/*" onChange={onPickImage} style={{ display: 'none' }} />
+            </label>
+            {questionImage && (
+              <>
+                <span>{questionImage.name}</span>
+                <button type="button" className="iconTextButton" onClick={() => setQuestionImage(null)}>
+                  Kaldır
+                </button>
+              </>
+            )}
+          </div>
+        )}
 
         <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
           <input
             value={prompt}
             onChange={(event) => setPrompt(event.target.value)}
             onKeyDown={(event) => { if (event.key === 'Enter') void send(); }}
-            placeholder="Soru veya konu yaz…"
+            placeholder={cardsReady ? 'Kartlarla ilgili takip sorusu sor…' : 'Soru veya konu yaz…'}
             style={{
               flex: 1, background: 'var(--surface-3)', border: '1px solid var(--border)',
               borderRadius: 8, padding: '8px 10px', color: 'var(--text)'
