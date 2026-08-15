@@ -172,6 +172,7 @@ export function KatalogView() {
   const [importUrl, setImportUrl] = useState('');
   const [importBusy, setImportBusy] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
+  const [importPanelOpen, setImportPanelOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -427,6 +428,7 @@ export function KatalogView() {
         posterUrl: body.posterUrl
       }, ...prev]);
       setImportUrl('');
+      setImportPanelOpen(false);
     } catch (err) {
       setImportError(err instanceof Error ? err.message : 'Bilinmeyen hata');
     } finally {
@@ -453,23 +455,6 @@ export function KatalogView() {
             Derslerim
           </button>
         </div>
-
-        {tab === 'private' && (
-          <div className="katalogYoutubeImport">
-            <input
-              value={importUrl}
-              onChange={(event) => setImportUrl(event.target.value)}
-              onKeyDown={(event) => { if (event.key === 'Enter') void submitYoutubeImport(); }}
-              placeholder="YouTube video linki…"
-              className="katalogChatInput"
-              disabled={importBusy}
-            />
-            <button type="button" className="katalogOpenChatBtn" onClick={() => void submitYoutubeImport()} disabled={importBusy}>
-              {importBusy ? 'Ekleniyor…' : "YouTube'dan Ekle"}
-            </button>
-            {importError && <span className="katalogError" style={{ fontSize: 13 }}>{importError}</span>}
-          </div>
-        )}
 
         {loading && <div className="katalogStatus">Katalog yükleniyor…</div>}
         {error && <div className="katalogStatus katalogError">{error}</div>}
@@ -523,6 +508,43 @@ export function KatalogView() {
           ))}
         </div>
       </div>
+
+      {tab === 'private' && (
+        <>
+          {importPanelOpen && (
+            <div className="katalogYoutubeFab-panel">
+              <div className="katalogYoutubeFab-panelHeader">
+                <strong>YouTube'dan Ekle</strong>
+                <button type="button" className="katalogPlayerClose" onClick={() => setImportPanelOpen(false)} aria-label="Kapat">✕</button>
+              </div>
+              <input
+                value={importUrl}
+                onChange={(event) => setImportUrl(event.target.value)}
+                onKeyDown={(event) => { if (event.key === 'Enter') void submitYoutubeImport(); }}
+                placeholder="YouTube video linki…"
+                className="katalogChatInput"
+                disabled={importBusy}
+                autoFocus
+              />
+              <button type="button" className="katalogOpenChatBtn" onClick={() => void submitYoutubeImport()} disabled={importBusy}>
+                {importBusy ? 'Ekleniyor…' : 'Ekle'}
+              </button>
+              {importError && <span className="katalogError" style={{ fontSize: 13 }}>{importError}</span>}
+            </div>
+          )}
+          <button
+            type="button"
+            className="katalogYoutubeFab"
+            onClick={() => setImportPanelOpen((open) => !open)}
+            aria-label="YouTube'dan ekle"
+            title="YouTube'dan ekle"
+          >
+            <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true">
+              <path fill="currentColor" d="M8 5v14l11-7z" />
+            </svg>
+          </button>
+        </>
+      )}
 
       {playback && (
         <div className="katalogPlayerOverlay" onClick={() => { setPlayback(null); setChatOpen(false); }}>
