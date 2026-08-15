@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 type CatalogEntry = {
   id: string;
@@ -12,16 +12,41 @@ type CatalogEntry = {
 
 type CatalogTab = 'public' | 'private';
 
+type ChatHistoryItem = {
+  lessonId: string;
+  title: string;
+  posterUrl: string | null;
+  tab: CatalogTab;
+  lastOpenedAt: string;
+};
+
+type ChatMessage = {
+  role: 'user' | 'assistant';
+  timestamp: string;
+  content: string;
+  pending?: boolean;
+  visionUsed?: boolean;
+  toolsUsed?: string[];
+  artifacts?: { type: string; url: string; title?: string }[];
+  sources?: { url: string; title?: string }[];
+};
+
+const CHAT_HISTORY_STORAGE_KEY = 'karaKatalogChatHistory';
+
 function apiBase() {
   return (window as { KARA_API_BASE_URL?: string }).KARA_API_BASE_URL || '';
 }
 
+function formatTime(seconds: number) {
+  const safeSeconds = Math.max(0, Math.floor(Number(seconds) || 0));
+  const minutes = Math.floor(safeSeconds / 60);
+  const rest = safeSeconds % 60;
+  return `${minutes}:${String(rest).padStart(2, '0')}`;
+}
+
 function formatDuration(seconds: number | null) {
   if (!seconds || !Number.isFinite(seconds)) return null;
-  const total = Math.round(seconds);
-  const minutes = Math.floor(total / 60);
-  const secs = total % 60;
-  return `${minutes}:${String(secs).padStart(2, '0')}`;
+  return formatTime(seconds);
 }
 
 function groupByTopic(entries: CatalogEntry[]) {
@@ -41,12 +66,57 @@ function groupByTopic(entries: CatalogEntry[]) {
   return rows;
 }
 
+function loadChatHistory(): ChatHistoryItem[] {
+  try {
+    const stored = JSON.parse(window.localStorage.getItem(CHAT_HISTORY_STORAGE_KEY) || '[]');
+    return Array.isArray(stored) ? stored : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveChatHistory(history: ChatHistoryItem[]) {
+  window.localStorage.setItem(CHAT_HISTORY_STORAGE_KEY, JSON.stringify(history));
+}
+
+// Escapes then re-applies a small, controlled markdown subset — mirrors the
+// legacy renderMathMarkdown() so Kara answers read the same everywhere.
+function renderMathMarkdown(value: string) {
+  const escaped = value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+  const withBold = escaped.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  const html = withBold
+    .split(/\n{2,}/)
+    .map((paragraph) => `<p>${paragraph.replace(/\n/g, '<br>')}</p>`)
+    .join('');
+  return { __html: html };
+}
+
+function safeUrl(value: string | undefined) {
+  if (!value) return '';
+  try {
+    const url = new URL(value, window.location.href);
+    return ['http:', 'https:'].includes(url.protocol) ? url.href : '';
+  } catch {
+    return '';
+  }
+}
+
 export function KatalogView() {
   const [tab, setTab] = useState<CatalogTab>('public');
   const [entries, setEntries] = useState<CatalogEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [playback, setPlayback] = useState<{ title: string; url: string } | null>(null);
+  const [playback, setPlayback] = useState<{ id: string; title: string; url: string; posterUrl: string | null; tab: CatalogTab } | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatHistory, setChatHistory] = useState<ChatHistoryItem[]>(() => loadChatHistory());
+  const [chatMessagesByLesson, setChatMessagesByLesson] = useState<Record<string, ChatMessage[]>>({});
+  const [chatInput, setChatInput] = useState('');
+  const [chatBusy, setChatBusy] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -78,109 +148,352 @@ export function KatalogView() {
 
   const rows = useMemo(() => groupByTopic(entries), [entries]);
   const hero = entries[0] || null;
+  const activeMessages = playback ? chatMessagesByLesson[playback.id] || [] : [];
+
+  async function fetchVideoUrl(lessonId: string, sourceTab: CatalogTab) {
+    const base = apiBase();
+    const headers: Record<string, string> = {};
+    const path = sourceTab === 'public'
+      ? `/api/catalog/${encodeURIComponent(lessonId)}/video-url`
+      : `/api/lessons/${encodeURIComponent(lessonId)}/video-url`;
+    if (sourceTab === 'private') {
+      const token = window.KARA_AUTH?.getAccessToken();
+      if (token) headers.Authorization = `Bearer ${token}`;
+    }
+    const response = await fetch(`${base}${path}`, { headers });
+    if (!response.ok) throw new Error(`Video açılamadı (${response.status})`);
+    const data = await response.json();
+    if (!data.videoUrl) throw new Error('Bu ders için video bulunamadı.');
+    return data.videoUrl as string;
+  }
 
   async function openLesson(entry: CatalogEntry) {
     try {
-      const base = apiBase();
-      const headers: Record<string, string> = {};
-      const path = tab === 'public'
-        ? `/api/catalog/${encodeURIComponent(entry.id)}/video-url`
-        : `/api/lessons/${encodeURIComponent(entry.id)}/video-url`;
-      if (tab === 'private') {
-        const token = window.KARA_AUTH?.getAccessToken();
-        if (token) headers.Authorization = `Bearer ${token}`;
-      }
-      const response = await fetch(`${base}${path}`, { headers });
-      if (!response.ok) throw new Error(`Video açılamadı (${response.status})`);
-      const data = await response.json();
-      if (!data.videoUrl) throw new Error('Bu ders için video bulunamadı.');
-      setPlayback({ title: entry.title, url: data.videoUrl });
+      const url = await fetchVideoUrl(entry.id, tab);
+      setPlayback({ id: entry.id, title: entry.title, url, posterUrl: entry.posterUrl, tab });
+      setChatOpen(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Bilinmeyen hata');
+    }
+  }
+
+  function openChat() {
+    if (!playback) return;
+    const item: ChatHistoryItem = {
+      lessonId: playback.id,
+      title: playback.title,
+      posterUrl: playback.posterUrl,
+      tab: playback.tab,
+      lastOpenedAt: new Date().toISOString()
+    };
+    setChatHistory((prev) => {
+      const next = [item, ...prev.filter((existing) => existing.lessonId !== item.lessonId)].slice(0, 30);
+      saveChatHistory(next);
+      return next;
+    });
+    setChatMessagesByLesson((prev) => (prev[playback.id] ? prev : { ...prev, [playback.id]: [] }));
+    setChatOpen(true);
+  }
+
+  async function openHistoryItem(item: ChatHistoryItem) {
+    if (playback?.id === item.lessonId) {
+      setChatOpen(true);
+      return;
+    }
+    try {
+      const url = await fetchVideoUrl(item.lessonId, item.tab);
+      setPlayback({ id: item.lessonId, title: item.title, url, posterUrl: item.posterUrl, tab: item.tab });
+      setChatMessagesByLesson((prev) => (prev[item.lessonId] ? prev : { ...prev, [item.lessonId]: [] }));
+      setChatOpen(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Bilinmeyen hata');
+    }
+  }
+
+  function captureVideoFrame(): { mimeType: string; data: string } | null {
+    const video = videoRef.current;
+    if (!video || video.readyState < 2) return null;
+    try {
+      const canvas = document.createElement('canvas');
+      const sourceWidth = video.videoWidth || 1280;
+      const sourceHeight = video.videoHeight || 720;
+      const scale = Math.min(1, 640 / sourceWidth, 360 / sourceHeight);
+      canvas.width = Math.max(1, Math.round(sourceWidth * scale));
+      canvas.height = Math.max(1, Math.round(sourceHeight * scale));
+      const context = canvas.getContext('2d');
+      if (!context) return null;
+      context.imageSmoothingEnabled = true;
+      context.imageSmoothingQuality = 'high';
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+      return { mimeType: 'image/jpeg', data: canvas.toDataURL('image/jpeg', 0.68) };
+    } catch {
+      return null;
+    }
+  }
+
+  async function sendChatMessage() {
+    const question = chatInput.trim();
+    if (!question || chatBusy || !playback) return;
+    const token = window.KARA_AUTH?.getAccessToken();
+    if (!token) {
+      const lessonId = playback.id;
+      setChatMessagesByLesson((prev) => ({
+        ...prev,
+        [lessonId]: [...(prev[lessonId] || []), {
+          role: 'assistant',
+          timestamp: formatTime(videoRef.current?.currentTime || 0),
+          content: 'Cevap alinamadi: Sohbet için giriş yapmalısın.'
+        }]
+      }));
+      return;
+    }
+
+    const lessonId = playback.id;
+    const timestampSeconds = videoRef.current?.currentTime || 0;
+    const timestampLabel = formatTime(timestampSeconds);
+    const frame = captureVideoFrame();
+
+    const priorHistory = (chatMessagesByLesson[lessonId] || []).filter((message) => !message.pending);
+    const chatHistoryPayload = priorHistory.slice(-6).map((message) => ({
+      role: message.role,
+      timestamp: message.timestamp,
+      content: message.content.slice(0, 1200)
+    }));
+
+    setChatInput('');
+    setChatBusy(true);
+    const userMessage: ChatMessage = { role: 'user', timestamp: timestampLabel, content: question };
+    const pendingMessage: ChatMessage = { role: 'assistant', timestamp: timestampLabel, content: 'Düşünüyorum...', pending: true };
+    setChatMessagesByLesson((prev) => ({ ...prev, [lessonId]: [...(prev[lessonId] || []), userMessage, pendingMessage] }));
+
+    try {
+      const base = apiBase();
+      const response = await fetch(`${base}/api/ask-kara`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          question,
+          frame,
+          timestamp_seconds: timestampSeconds,
+          timestamp_label: timestampLabel,
+          lesson_title: playback.title,
+          lesson_id: lessonId,
+          chat_history: chatHistoryPayload
+        })
+      });
+      if (!response.ok) throw new Error(`Kara yanıt veremedi (${response.status})`);
+      const data = await response.json();
+      setChatMessagesByLesson((prev) => {
+        const list = [...(prev[lessonId] || [])];
+        const idx = list.lastIndexOf(pendingMessage);
+        const resolved: ChatMessage = {
+          role: 'assistant',
+          timestamp: timestampLabel,
+          content: data.answer || 'Bu soruya cevap üretilemedi.',
+          visionUsed: data.visionUsed === true,
+          toolsUsed: Array.isArray(data.toolsUsed) ? data.toolsUsed : [],
+          artifacts: Array.isArray(data.artifacts) ? data.artifacts : [],
+          sources: Array.isArray(data.sources) ? data.sources : []
+        };
+        if (idx >= 0) list[idx] = resolved; else list.push(resolved);
+        return { ...prev, [lessonId]: list };
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Bilinmeyen hata';
+      setChatMessagesByLesson((prev) => {
+        const list = [...(prev[lessonId] || [])];
+        const idx = list.lastIndexOf(pendingMessage);
+        const resolved: ChatMessage = { role: 'assistant', timestamp: timestampLabel, content: `Cevap alinamadi: ${message}` };
+        if (idx >= 0) list[idx] = resolved; else list.push(resolved);
+        return { ...prev, [lessonId]: list };
+      });
+    } finally {
+      setChatBusy(false);
     }
   }
 
   return (
     <section className="placeholderView katalogView hidden" id="katalogView" style={{ alignItems: 'stretch', padding: 0, minHeight: '100vh' }}>
       <div style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
-      <div className="katalogTabs">
-        <button
-          type="button"
-          className={`katalogTabBtn${tab === 'public' ? ' active' : ''}`}
-          onClick={() => setTab('public')}
-        >
-          Herkese Açık
-        </button>
-        <button
-          type="button"
-          className={`katalogTabBtn${tab === 'private' ? ' active' : ''}`}
-          onClick={() => setTab('private')}
-        >
-          Derslerim
-        </button>
-      </div>
-
-      {loading && <div className="katalogStatus">Katalog yükleniyor…</div>}
-      {error && <div className="katalogStatus katalogError">{error}</div>}
-      {!loading && !error && entries.length === 0 && (
-        <div className="katalogStatus">
-          {tab === 'public' ? 'Henüz herkese açık ders yok.' : 'Henüz kendi dersin yok.'}
+        <div className="katalogTabs">
+          <button
+            type="button"
+            className={`katalogTabBtn${tab === 'public' ? ' active' : ''}`}
+            onClick={() => setTab('public')}
+          >
+            Herkese Açık
+          </button>
+          <button
+            type="button"
+            className={`katalogTabBtn${tab === 'private' ? ' active' : ''}`}
+            onClick={() => setTab('private')}
+          >
+            Derslerim
+          </button>
         </div>
-      )}
 
-      {hero && (
-        <div
-          className="katalogHero"
-          style={hero.posterUrl ? { backgroundImage: `url(${hero.posterUrl})` } : undefined}
-        >
-          <div className="katalogHeroOverlay">
-            <div className="katalogHeroTopic">{hero.topic || 'Ders'}</div>
-            <h1 className="katalogHeroTitle">{hero.title}</h1>
-            <button type="button" className="katalogPlayBtn" onClick={() => void openLesson(hero)}>
-              ▶ İzle
-            </button>
+        {loading && <div className="katalogStatus">Katalog yükleniyor…</div>}
+        {error && <div className="katalogStatus katalogError">{error}</div>}
+        {!loading && !error && entries.length === 0 && (
+          <div className="katalogStatus">
+            {tab === 'public' ? 'Henüz herkese açık ders yok.' : 'Henüz kendi dersin yok.'}
           </div>
-        </div>
-      )}
+        )}
 
-      <div className="katalogRows">
-        {rows.map((row) => (
-          <div key={row.key} className="katalogRow">
-            <div className="katalogRowLabel">{row.label}</div>
-            <div className="katalogRowTrack">
-              {row.items.map((entry) => (
-                <button
-                  type="button"
-                  key={`${row.key}-${entry.id}`}
-                  className="katalogCard"
-                  onClick={() => void openLesson(entry)}
-                >
-                  <div
-                    className="katalogCardPoster"
-                    style={entry.posterUrl ? { backgroundImage: `url(${entry.posterUrl})` } : undefined}
-                  >
-                    {!entry.posterUrl && <span className="katalogCardPosterFallback">{entry.title.slice(0, 1)}</span>}
-                    {formatDuration(entry.durationSeconds) && (
-                      <span className="katalogCardDuration">{formatDuration(entry.durationSeconds)}</span>
-                    )}
-                  </div>
-                  <div className="katalogCardTitle">{entry.title}</div>
-                </button>
-              ))}
+        {hero && (
+          <div
+            className="katalogHero"
+            style={hero.posterUrl ? { backgroundImage: `url(${hero.posterUrl})` } : undefined}
+          >
+            <div className="katalogHeroOverlay">
+              <div className="katalogHeroTopic">{hero.topic || 'Ders'}</div>
+              <h1 className="katalogHeroTitle">{hero.title}</h1>
+              <button type="button" className="katalogPlayBtn" onClick={() => void openLesson(hero)}>
+                ▶ İzle
+              </button>
             </div>
           </div>
-        ))}
-      </div>
+        )}
+
+        <div className="katalogRows">
+          {rows.map((row) => (
+            <div key={row.key} className="katalogRow">
+              <div className="katalogRowLabel">{row.label}</div>
+              <div className="katalogRowTrack">
+                {row.items.map((entry) => (
+                  <button
+                    type="button"
+                    key={`${row.key}-${entry.id}`}
+                    className="katalogCard"
+                    onClick={() => void openLesson(entry)}
+                  >
+                    <div
+                      className="katalogCardPoster"
+                      style={entry.posterUrl ? { backgroundImage: `url(${entry.posterUrl})` } : undefined}
+                    >
+                      {!entry.posterUrl && <span className="katalogCardPosterFallback">{entry.title.slice(0, 1)}</span>}
+                      {formatDuration(entry.durationSeconds) && (
+                        <span className="katalogCardDuration">{formatDuration(entry.durationSeconds)}</span>
+                      )}
+                    </div>
+                    <div className="katalogCardTitle">{entry.title}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
 
       {playback && (
-        <div className="katalogPlayerOverlay" onClick={() => setPlayback(null)}>
-          <div className="katalogPlayerCard" onClick={(event) => event.stopPropagation()}>
-            <div className="katalogPlayerHeader">
-              <strong>{playback.title}</strong>
-              <button type="button" className="katalogPlayerClose" onClick={() => setPlayback(null)} aria-label="Kapat">✕</button>
+        <div className="katalogPlayerOverlay" onClick={() => { setPlayback(null); setChatOpen(false); }}>
+          <div className={`katalogPlayerCard${chatOpen ? ' katalogPlayerCard-withChat' : ''}`} onClick={(event) => event.stopPropagation()}>
+            {chatOpen && (
+              <aside className="katalogChatHistory">
+                <div className="katalogChatHistoryHeader">Sohbet Geçmişi</div>
+                <div className="katalogChatHistoryList">
+                  {chatHistory.length === 0 && <div className="katalogStatus">Henüz sohbet yok.</div>}
+                  {chatHistory.map((item) => (
+                    <button
+                      type="button"
+                      key={item.lessonId}
+                      className={`katalogChatHistoryItem${item.lessonId === playback.id ? ' active' : ''}`}
+                      onClick={() => void openHistoryItem(item)}
+                    >
+                      {item.posterUrl && (
+                        <span className="katalogChatHistoryThumb" style={{ backgroundImage: `url(${item.posterUrl})` }} />
+                      )}
+                      <span className="katalogChatHistoryTitle">{item.title}</span>
+                    </button>
+                  ))}
+                </div>
+              </aside>
+            )}
+
+            <div className="katalogPlayerMain">
+              <div className="katalogPlayerHeader">
+                <strong>{playback.title}</strong>
+                <button type="button" className="katalogPlayerClose" onClick={() => { setPlayback(null); setChatOpen(false); }} aria-label="Kapat">✕</button>
+              </div>
+              <video ref={videoRef} src={playback.url} controls autoPlay playsInline crossOrigin="anonymous" style={{ width: '100%', display: 'block' }} />
+
+              {!chatOpen && (
+                <div className="katalogChatBox">
+                  <button type="button" className="katalogOpenChatBtn" onClick={openChat}>
+                    Open in chat
+                  </button>
+                </div>
+              )}
+
+              {chatOpen && (
+                <div className="katalogChatThread">
+                  <div className="katalogChatMessages">
+                    {activeMessages.length === 0 && (
+                      <p className="katalogStatus">Bu ders hakkında Kara'ya bir soru sor.</p>
+                    )}
+                    {activeMessages.map((message, index) => (
+                      <article
+                        key={index}
+                        className={`chatMessage ${message.role === 'assistant' ? 'assistant' : 'user'}${message.pending ? ' pending' : ''}`}
+                        aria-busy={message.pending || undefined}
+                      >
+                        <div className="chatMeta">
+                          {message.role === 'assistant'
+                            ? `Kara${message.pending ? ' · kare inceleniyor' : message.visionUsed === true ? ' · kareyi gördü' : message.visionUsed === false ? ' · yalnızca metin bağlamı' : ''}`
+                            : `Sen · ${message.timestamp}`}
+                        </div>
+                        <div className="chatContent">
+                          {message.pending ? (
+                            <div className="chatThinking">
+                              <span>Kara düşünüyor</span>
+                              <span className="typingDots" aria-hidden="true"><i /><i /><i /></span>
+                            </div>
+                          ) : (
+                            <>
+                              <div dangerouslySetInnerHTML={renderMathMarkdown(message.content)} />
+                              {!!message.toolsUsed?.length && (
+                                <div className="karaToolBadges">
+                                  {message.toolsUsed.map((tool, i) => (
+                                    <span key={i}>{tool === 'web_search' ? 'Web araması' : tool === 'generate_manim' ? 'Manim görseli' : tool}</span>
+                                  ))}
+                                </div>
+                              )}
+                              {message.artifacts?.filter((a) => a.type === 'image' && safeUrl(a.url)).map((artifact, i) => (
+                                <figure className="karaArtifact" key={i}>
+                                  <img src={safeUrl(artifact.url)} alt={artifact.title || 'Kara tarafından oluşturulan Manim görseli'} loading="lazy" />
+                                  <figcaption>{artifact.title || 'Kara Manim görseli'}</figcaption>
+                                </figure>
+                              ))}
+                              {!!message.sources?.filter((s) => safeUrl(s.url)).length && (
+                                <div className="karaSources">
+                                  <strong>Kaynaklar</strong>
+                                  {message.sources.filter((s) => safeUrl(s.url)).map((source, i) => (
+                                    <a key={i} href={safeUrl(source.url)} target="_blank" rel="noopener noreferrer">{source.title || source.url}</a>
+                                  ))}
+                                </div>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                  <div className="katalogChatInputRow">
+                    <input
+                      value={chatInput}
+                      onChange={(event) => setChatInput(event.target.value)}
+                      onKeyDown={(event) => { if (event.key === 'Enter') void sendChatMessage(); }}
+                      placeholder="Bu ders hakkında bir şey sor…"
+                      className="katalogChatInput"
+                      disabled={chatBusy}
+                    />
+                    <button type="button" className="primaryAction" onClick={() => void sendChatMessage()} disabled={chatBusy}>
+                      Gönder
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
-            <video src={playback.url} controls autoPlay style={{ width: '100%', display: 'block' }} />
           </div>
         </div>
       )}
