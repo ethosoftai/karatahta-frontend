@@ -512,24 +512,26 @@ export function KatalogView() {
       {tab === 'private' && (
         <>
           {importPanelOpen && (
-            <div className="katalogYoutubeFab-panel">
-              <div className="katalogYoutubeFab-panelHeader">
-                <strong>YouTube'dan Ekle</strong>
-                <button type="button" className="katalogPlayerClose" onClick={() => setImportPanelOpen(false)} aria-label="Kapat">✕</button>
+            <div className="katalogYoutubeFab-backdrop" onClick={() => setImportPanelOpen(false)}>
+              <div className="katalogYoutubeFab-panel" onClick={(event) => event.stopPropagation()}>
+                <div className="katalogYoutubeFab-panelHeader">
+                  <strong>YouTube'dan Ekle</strong>
+                  <button type="button" className="katalogPlayerClose" onClick={() => setImportPanelOpen(false)} aria-label="Kapat">✕</button>
+                </div>
+                <input
+                  value={importUrl}
+                  onChange={(event) => setImportUrl(event.target.value)}
+                  onKeyDown={(event) => { if (event.key === 'Enter') void submitYoutubeImport(); }}
+                  placeholder="YouTube video linki…"
+                  className="katalogChatInput"
+                  disabled={importBusy}
+                  autoFocus
+                />
+                <button type="button" className="katalogOpenChatBtn" onClick={() => void submitYoutubeImport()} disabled={importBusy}>
+                  {importBusy ? 'Ekleniyor…' : 'Ekle'}
+                </button>
+                {importError && <span className="katalogError" style={{ fontSize: 13 }}>{importError}</span>}
               </div>
-              <input
-                value={importUrl}
-                onChange={(event) => setImportUrl(event.target.value)}
-                onKeyDown={(event) => { if (event.key === 'Enter') void submitYoutubeImport(); }}
-                placeholder="YouTube video linki…"
-                className="katalogChatInput"
-                disabled={importBusy}
-                autoFocus
-              />
-              <button type="button" className="katalogOpenChatBtn" onClick={() => void submitYoutubeImport()} disabled={importBusy}>
-                {importBusy ? 'Ekleniyor…' : 'Ekle'}
-              </button>
-              {importError && <span className="katalogError" style={{ fontSize: 13 }}>{importError}</span>}
             </div>
           )}
           <button
@@ -539,9 +541,11 @@ export function KatalogView() {
             aria-label="YouTube'dan ekle"
             title="YouTube'dan ekle"
           >
-            <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true">
-              <path fill="currentColor" d="M8 5v14l11-7z" />
+            <svg viewBox="0 0 28 20" width="26" height="19" aria-hidden="true" className="katalogYoutubeFabIcon">
+              <path fill="#fff" d="M27.4 3.1c-.3-1.2-1.3-2.1-2.5-2.4C22.7.1 14 .1 14 .1s-8.7 0-10.9.6C1.9 1 1 1.9.6 3.1 0 5.3 0 10 0 10s0 4.7.6 6.9c.3 1.2 1.3 2.1 2.5 2.4C5.3 19.9 14 19.9 14 19.9s8.7 0 10.9-.6c1.2-.3 2.1-1.3 2.5-2.4.6-2.2.6-6.9.6-6.9s0-4.7-.6-6.9z" />
+              <path fill="#e53935" d="M11.2 14.3 18.5 10l-7.3-4.3z" />
             </svg>
+            <span>YouTube'dan Ekle</span>
           </button>
         </>
       )}
