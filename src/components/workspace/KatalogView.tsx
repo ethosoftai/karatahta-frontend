@@ -239,19 +239,26 @@ export function KatalogView() {
     setChatOpen(true);
   }
 
-  // Bir dersin kendi geçmişi her zaman kullanıcının kendi (owned) erişim
-  // yoluyla açılır — public/private tab ayrımı burada önemli değil, çünkü
-  // bu, kullanıcının daha önce soru sorduğu (dolayısıyla erişimi olan) bir
-  // ders.
+  // Sidebar geçmişindeki bir sohbet kullanıcının KENDİ dersi olabilir
+  // (owned, /api/lessons/:id/video-url) ya da başka birinin herkese açık
+  // dersi hakkında sorduğu bir soru olabilir (/api/catalog/:id/video-url,
+  // sahiplik aranmaz) -- video her zaman sohbetle birlikte açılsın diye
+  // önce owned dener, olmazsa public'e düşer.
   async function openLessonChatById(lessonId: string, title: string, posterUrl: string | null) {
+    let access;
     try {
-      const access = await fetchVideoUrl(lessonId, 'private');
-      setPlayback({ id: lessonId, title, posterUrl, tab: 'private', ...access });
-      setChatMessagesByLesson((prev) => (prev[lessonId] ? prev : { ...prev, [lessonId]: [] }));
-      setChatOpen(true);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Bilinmeyen hata');
+      access = await fetchVideoUrl(lessonId, 'private');
+    } catch {
+      try {
+        access = await fetchVideoUrl(lessonId, 'public');
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Bilinmeyen hata');
+        return;
+      }
     }
+    setPlayback({ id: lessonId, title, posterUrl, tab: 'private', ...access });
+    setChatMessagesByLesson((prev) => (prev[lessonId] ? prev : { ...prev, [lessonId]: [] }));
+    setChatOpen(true);
   }
 
   // Sol sidebar (legacy app.js) gerçek katalog sohbet geçmişini
@@ -341,7 +348,8 @@ export function KatalogView() {
           timestamp_label: timestampLabel,
           lesson_title: playback.title,
           lesson_id: lessonId,
-          chat_history: chatHistoryPayload
+          chat_history: chatHistoryPayload,
+          source: 'catalog'
         })
       });
       if (!response.ok) throw new Error(`Kara yanıt veremedi (${response.status})`);
