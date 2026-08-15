@@ -1,4 +1,4 @@
-import { useState, type ChangeEvent } from 'react';
+import { useEffect, useState, type ChangeEvent } from 'react';
 
 type Card = { index: number; title: string; explanation: string; imageDataUrl: string };
 type ChatTurn = { role: 'user' | 'assistant'; content: string };
@@ -66,9 +66,15 @@ export function CardsView() {
   const [cardsReady, setCardsReady] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [sessionId, setSessionId] = useState<string | null>(null);
 
   function apiBase() {
     return (window as { KARA_API_BASE_URL?: string }).KARA_API_BASE_URL || '';
+  }
+
+  function authHeaders(): Record<string, string> {
+    const token = window.KARA_AUTH?.getAccessToken();
+    return token ? { Authorization: `Bearer ${token}` } : {};
   }
 
   // First message: generates the card sequence. Accepts a typed topic/
@@ -83,7 +89,7 @@ export function CardsView() {
       }
       const response = await fetch(`${apiBase()}/api/cards/generate`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify(body)
       });
       if (!response.ok) throw new Error(`Sunucu hatasi (${response.status})`);
@@ -93,6 +99,8 @@ export function CardsView() {
           const card = event.card as Card;
           batch.push(card);
           setFeed((prev) => [...prev, { kind: 'card', card }]);
+        } else if (event.type === 'session') {
+          setSessionId(event.id as string);
         } else if (event.type === 'error') {
           setError(event.message);
         }
@@ -116,8 +124,8 @@ export function CardsView() {
     try {
       const response = await fetch(`${apiBase()}/api/cards/ask`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question: text, cards, history: nextHistory })
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify({ question: text, cards, history: nextHistory, session_id: sessionId })
       });
       if (!response.ok) throw new Error(`Sunucu hatasi (${response.status})`);
       const data: { answer: string } = await response.json();
@@ -127,6 +135,45 @@ export function CardsView() {
       setError(err instanceof Error ? err.message : 'Bilinmeyen hata');
     }
   }
+
+  // Sol sidebar (legacy app.js) GET /api/cards/sessions'tan gerçek kart
+  // geçmişini listeler; bir öğeye tıklanınca bu event üzerinden React
+  // tarafına köprüleniyor.
+  useEffect(() => {
+    async function openSession(id: string) {
+      setError(null);
+      try {
+        const response = await fetch(`${apiBase()}/api/cards/sessions/${encodeURIComponent(id)}`, { headers: authHeaders() });
+        if (!response.ok) throw new Error(`Oturum acilamadi (${response.status})`);
+        const data: { id: string; title: string; cards: (Card & { imageUrl: string | null })[]; messages: { role: 'user' | 'assistant'; content: string }[] } = await response.json();
+        const loadedCards: Card[] = data.cards.map((card, index) => ({
+          index,
+          title: card.title,
+          explanation: card.explanation,
+          imageDataUrl: card.imageUrl || ''
+        }));
+        const loadedFeed: FeedItem[] = [
+          ...loadedCards.map((card): FeedItem => ({ kind: 'card', card })),
+          ...data.messages.map((message): FeedItem => (
+            message.role === 'user' ? { kind: 'user', text: message.content } : { kind: 'assistant', text: message.content }
+          ))
+        ];
+        setSessionId(data.id);
+        setCards(loadedCards);
+        setFeed(loadedFeed);
+        setChatHistory(data.messages.map((message) => ({ role: message.role, content: message.content })));
+        setCardsReady(true);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Bilinmeyen hata');
+      }
+    }
+    function handler(event: Event) {
+      const detail = (event as CustomEvent<{ sessionId?: string }>).detail;
+      if (detail?.sessionId) void openSession(detail.sessionId);
+    }
+    window.addEventListener('kara:open-card-session', handler);
+    return () => window.removeEventListener('kara:open-card-session', handler);
+  }, []);
 
   async function send() {
     const text = prompt.trim();

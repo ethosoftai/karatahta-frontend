@@ -12,14 +12,6 @@ type CatalogEntry = {
 
 type CatalogTab = 'public' | 'private';
 
-type ChatHistoryItem = {
-  lessonId: string;
-  title: string;
-  posterUrl: string | null;
-  tab: CatalogTab;
-  lastOpenedAt: string;
-};
-
 type ChatMessage = {
   role: 'user' | 'assistant';
   timestamp: string;
@@ -60,8 +52,6 @@ declare global {
   }
 }
 
-const CHAT_HISTORY_STORAGE_KEY = 'karaKatalogChatHistory';
-
 function apiBase() {
   return (window as { KARA_API_BASE_URL?: string }).KARA_API_BASE_URL || '';
 }
@@ -93,19 +83,6 @@ function groupByTopic(entries: CatalogEntry[]) {
     rows.push({ key: topic, label: topic, items });
   }
   return rows;
-}
-
-function loadChatHistory(): ChatHistoryItem[] {
-  try {
-    const stored = JSON.parse(window.localStorage.getItem(CHAT_HISTORY_STORAGE_KEY) || '[]');
-    return Array.isArray(stored) ? stored : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveChatHistory(history: ChatHistoryItem[]) {
-  window.localStorage.setItem(CHAT_HISTORY_STORAGE_KEY, JSON.stringify(history));
 }
 
 let youtubeApiPromise: Promise<void> | null = null;
@@ -164,7 +141,6 @@ export function KatalogView() {
   const youtubePlayerRef = useRef<YoutubePlayer | null>(null);
 
   const [chatOpen, setChatOpen] = useState(false);
-  const [chatHistory, setChatHistory] = useState<ChatHistoryItem[]>(() => loadChatHistory());
   const [chatMessagesByLesson, setChatMessagesByLesson] = useState<Record<string, ChatMessage[]>>({});
   const [chatInput, setChatInput] = useState('');
   const [chatBusy, setChatBusy] = useState(false);
@@ -259,36 +235,36 @@ export function KatalogView() {
 
   function openChat() {
     if (!playback) return;
-    const item: ChatHistoryItem = {
-      lessonId: playback.id,
-      title: playback.title,
-      posterUrl: playback.posterUrl,
-      tab: playback.tab,
-      lastOpenedAt: new Date().toISOString()
-    };
-    setChatHistory((prev) => {
-      const next = [item, ...prev.filter((existing) => existing.lessonId !== item.lessonId)].slice(0, 30);
-      saveChatHistory(next);
-      return next;
-    });
     setChatMessagesByLesson((prev) => (prev[playback.id] ? prev : { ...prev, [playback.id]: [] }));
     setChatOpen(true);
   }
 
-  async function openHistoryItem(item: ChatHistoryItem) {
-    if (playback?.id === item.lessonId) {
-      setChatOpen(true);
-      return;
-    }
+  // Bir dersin kendi geçmişi her zaman kullanıcının kendi (owned) erişim
+  // yoluyla açılır — public/private tab ayrımı burada önemli değil, çünkü
+  // bu, kullanıcının daha önce soru sorduğu (dolayısıyla erişimi olan) bir
+  // ders.
+  async function openLessonChatById(lessonId: string, title: string, posterUrl: string | null) {
     try {
-      const access = await fetchVideoUrl(item.lessonId, item.tab);
-      setPlayback({ id: item.lessonId, title: item.title, posterUrl: item.posterUrl, tab: item.tab, ...access });
-      setChatMessagesByLesson((prev) => (prev[item.lessonId] ? prev : { ...prev, [item.lessonId]: [] }));
+      const access = await fetchVideoUrl(lessonId, 'private');
+      setPlayback({ id: lessonId, title, posterUrl, tab: 'private', ...access });
+      setChatMessagesByLesson((prev) => (prev[lessonId] ? prev : { ...prev, [lessonId]: [] }));
       setChatOpen(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Bilinmeyen hata');
     }
   }
+
+  // Sol sidebar (legacy app.js) gerçek katalog sohbet geçmişini
+  // GET /api/catalog/chats'ten çekip listeler; bir öğeye tıklanınca bu event
+  // üzerinden React tarafına köprüleniyor (window.KARA_AUTH ile aynı üslup).
+  useEffect(() => {
+    function handler(event: Event) {
+      const detail = (event as CustomEvent<{ lessonId?: string; title?: string; posterUrl?: string | null }>).detail;
+      if (detail?.lessonId) void openLessonChatById(detail.lessonId, detail.title || 'Ders', detail.posterUrl || null);
+    }
+    window.addEventListener('kara:open-catalog-chat', handler);
+    return () => window.removeEventListener('kara:open-catalog-chat', handler);
+  }, []);
 
   function captureVideoFrame(): { mimeType: string; data: string } | null {
     const video = videoRef.current;
@@ -553,28 +529,6 @@ export function KatalogView() {
       {playback && (
         <div className="katalogPlayerOverlay" onClick={() => { setPlayback(null); setChatOpen(false); }}>
           <div className={`katalogPlayerCard${chatOpen ? ' katalogPlayerCard-withChat' : ''}`} onClick={(event) => event.stopPropagation()}>
-            {chatOpen && (
-              <aside className="katalogChatHistory">
-                <div className="katalogChatHistoryHeader">Sohbet Geçmişi</div>
-                <div className="katalogChatHistoryList">
-                  {chatHistory.length === 0 && <div className="katalogStatus">Henüz sohbet yok.</div>}
-                  {chatHistory.map((item) => (
-                    <button
-                      type="button"
-                      key={item.lessonId}
-                      className={`katalogChatHistoryItem${item.lessonId === playback.id ? ' active' : ''}`}
-                      onClick={() => void openHistoryItem(item)}
-                    >
-                      {item.posterUrl && (
-                        <span className="katalogChatHistoryThumb" style={{ backgroundImage: `url(${item.posterUrl})` }} />
-                      )}
-                      <span className="katalogChatHistoryTitle">{item.title}</span>
-                    </button>
-                  ))}
-                </div>
-              </aside>
-            )}
-
             <div className="katalogPlayerMain">
               <div className="katalogPlayerHeader">
                 <strong>{playback.title}</strong>

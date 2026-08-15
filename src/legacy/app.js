@@ -57,9 +57,9 @@ const state = {
     googleOAuthEnabled: false
   },
   activeSection: 'karatahta',
-  // Kart bölümünün kendi backend'i/geçmişi henüz yok; ileride gerçek
-  // veriyle doldurulacak yer tutucu liste.
   cardChat: [],
+  cardSessions: [],
+  katalogChats: [],
   lessons: [],
   lessonSearch: '',
   plan: null,
@@ -815,11 +815,77 @@ function updateSectionNav() {
   els.katalogNavBtn.classList.toggle('active', state.activeSection === 'katalog');
 }
 
+function renderCardHistory() {
+  if (state.activeSection !== 'card') return;
+  const sessions = state.cardSessions || [];
+  if (!sessions.length) {
+    els.historyList.innerHTML = `<p class="historyEmpty">${escapeHtml(SECTION_META.card.emptyText)}</p>`;
+    return;
+  }
+  els.historyList.innerHTML = sessions.map((session) => `
+    <div class="historyItem">
+      <button class="historyRowBtn" type="button" data-card-session-id="${escapeHtml(session.id)}">
+        <span class="historyText">
+          <strong>${escapeHtml(session.title || 'Kart oturumu')}</strong>
+        </span>
+      </button>
+    </div>
+  `).join('');
+}
+
+async function refreshCardHistory() {
+  try {
+    const data = await apiGet('/api/cards/sessions');
+    state.cardSessions = data.sessions || [];
+  } catch {
+    state.cardSessions = [];
+  }
+  renderCardHistory();
+}
+
+function renderKatalogHistory() {
+  if (state.activeSection !== 'katalog') return;
+  const chats = state.katalogChats || [];
+  if (!chats.length) {
+    els.historyList.innerHTML = `<p class="historyEmpty">${escapeHtml(SECTION_META.katalog.emptyText)}</p>`;
+    return;
+  }
+  els.historyList.innerHTML = chats.map((chat) => `
+    <div class="historyItem">
+      <button class="historyRowBtn" type="button" data-katalog-lesson-id="${escapeHtml(chat.lessonId)}">
+        <span class="historyText">
+          <strong>${escapeHtml(chat.title || chat.topic || 'Ders')}</strong>
+        </span>
+      </button>
+    </div>
+  `).join('');
+}
+
+async function refreshKatalogHistory() {
+  try {
+    const data = await apiGet('/api/catalog/chats');
+    state.katalogChats = data.chats || [];
+  } catch {
+    state.katalogChats = [];
+  }
+  renderKatalogHistory();
+}
+
 function renderSectionHistory() {
   const meta = SECTION_META[state.activeSection] || SECTION_META.karatahta;
   els.sidebarSectionLabel.textContent = meta.label;
   if (state.activeSection === 'karatahta') {
     renderLessonHistory();
+    return;
+  }
+  if (state.activeSection === 'card') {
+    renderCardHistory();
+    void refreshCardHistory();
+    return;
+  }
+  if (state.activeSection === 'katalog') {
+    renderKatalogHistory();
+    void refreshKatalogHistory();
     return;
   }
   els.historyList.innerHTML = `<p class="historyEmpty">${escapeHtml(meta.emptyText || '')}</p>`;
@@ -2958,6 +3024,21 @@ els.historyList.addEventListener('click', (event) => {
   }
   if (button.dataset.lessonId) {
     void loadLessonFromHistory(button.dataset.lessonId);
+    return;
+  }
+  if (button.dataset.cardSessionId) {
+    window.dispatchEvent(new CustomEvent('kara:open-card-session', { detail: { sessionId: button.dataset.cardSessionId } }));
+    return;
+  }
+  if (button.dataset.katalogLessonId) {
+    const chat = (state.katalogChats || []).find((item) => item.lessonId === button.dataset.katalogLessonId);
+    window.dispatchEvent(new CustomEvent('kara:open-catalog-chat', {
+      detail: {
+        lessonId: button.dataset.katalogLessonId,
+        title: chat?.title || chat?.topic || 'Ders',
+        posterUrl: chat?.posterUrl || null
+      }
+    }));
   }
 });
 
