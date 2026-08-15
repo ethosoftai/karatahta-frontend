@@ -31,6 +31,35 @@ type ChatMessage = {
   sources?: { url: string; title?: string }[];
 };
 
+type PlaybackState = {
+  id: string;
+  title: string;
+  url: string | null;
+  posterUrl: string | null;
+  tab: CatalogTab;
+  isYoutube: boolean;
+  youtubeVideoId: string | null;
+};
+
+// Minimal surface of the YouTube IFrame Player API we actually use.
+type YoutubePlayer = {
+  getCurrentTime: () => number;
+  destroy: () => void;
+};
+
+declare global {
+  interface Window {
+    YT?: {
+      Player: new (element: HTMLElement, options: {
+        videoId: string;
+        playerVars?: Record<string, number>;
+        events?: { onReady?: () => void };
+      }) => YoutubePlayer;
+    };
+    onYouTubeIframeAPIReady?: () => void;
+  }
+}
+
 const CHAT_HISTORY_STORAGE_KEY = 'karaKatalogChatHistory';
 
 function apiBase() {
@@ -79,6 +108,26 @@ function saveChatHistory(history: ChatHistoryItem[]) {
   window.localStorage.setItem(CHAT_HISTORY_STORAGE_KEY, JSON.stringify(history));
 }
 
+let youtubeApiPromise: Promise<void> | null = null;
+function loadYoutubeIframeApi(): Promise<void> {
+  if (window.YT?.Player) return Promise.resolve();
+  if (youtubeApiPromise) return youtubeApiPromise;
+  youtubeApiPromise = new Promise((resolve) => {
+    const previousCallback = window.onYouTubeIframeAPIReady;
+    window.onYouTubeIframeAPIReady = () => {
+      previousCallback?.();
+      resolve();
+    };
+    if (!document.getElementById('youtube-iframe-api')) {
+      const script = document.createElement('script');
+      script.id = 'youtube-iframe-api';
+      script.src = 'https://www.youtube.com/iframe_api';
+      document.head.appendChild(script);
+    }
+  });
+  return youtubeApiPromise;
+}
+
 // Escapes then re-applies a small, controlled markdown subset — mirrors the
 // legacy renderMathMarkdown() so Kara answers read the same everywhere.
 function renderMathMarkdown(value: string) {
@@ -109,14 +158,20 @@ export function KatalogView() {
   const [entries, setEntries] = useState<CatalogEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [playback, setPlayback] = useState<{ id: string; title: string; url: string; posterUrl: string | null; tab: CatalogTab } | null>(null);
+  const [playback, setPlayback] = useState<PlaybackState | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const youtubeContainerRef = useRef<HTMLDivElement>(null);
+  const youtubePlayerRef = useRef<YoutubePlayer | null>(null);
 
   const [chatOpen, setChatOpen] = useState(false);
   const [chatHistory, setChatHistory] = useState<ChatHistoryItem[]>(() => loadChatHistory());
   const [chatMessagesByLesson, setChatMessagesByLesson] = useState<Record<string, ChatMessage[]>>({});
   const [chatInput, setChatInput] = useState('');
   const [chatBusy, setChatBusy] = useState(false);
+
+  const [importUrl, setImportUrl] = useState('');
+  const [importBusy, setImportBusy] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -146,6 +201,26 @@ export function KatalogView() {
     return () => { cancelled = true; };
   }, [tab]);
 
+  // Mount/replace the YouTube player whenever a YouTube lesson is opened.
+  useEffect(() => {
+    youtubePlayerRef.current?.destroy();
+    youtubePlayerRef.current = null;
+    if (!playback?.isYoutube || !playback.youtubeVideoId || !youtubeContainerRef.current) {
+      return;
+    }
+    let cancelled = false;
+    const videoId = playback.youtubeVideoId;
+    const container = youtubeContainerRef.current;
+    void loadYoutubeIframeApi().then(() => {
+      if (cancelled || !window.YT) return;
+      youtubePlayerRef.current = new window.YT.Player(container, {
+        videoId,
+        playerVars: { playsinline: 1 }
+      });
+    });
+    return () => { cancelled = true; };
+  }, [playback?.id, playback?.isYoutube, playback?.youtubeVideoId]);
+
   const rows = useMemo(() => groupByTopic(entries), [entries]);
   const hero = entries[0] || null;
   const activeMessages = playback ? chatMessagesByLesson[playback.id] || [] : [];
@@ -163,14 +238,18 @@ export function KatalogView() {
     const response = await fetch(`${base}${path}`, { headers });
     if (!response.ok) throw new Error(`Video açılamadı (${response.status})`);
     const data = await response.json();
-    if (!data.videoUrl) throw new Error('Bu ders için video bulunamadı.');
-    return data.videoUrl as string;
+    if (!data.videoUrl && !data.isYoutube) throw new Error('Bu ders için video bulunamadı.');
+    return {
+      url: data.videoUrl as string | null,
+      isYoutube: Boolean(data.isYoutube),
+      youtubeVideoId: (data.youtubeVideoId as string | null) || null
+    };
   }
 
   async function openLesson(entry: CatalogEntry) {
     try {
-      const url = await fetchVideoUrl(entry.id, tab);
-      setPlayback({ id: entry.id, title: entry.title, url, posterUrl: entry.posterUrl, tab });
+      const access = await fetchVideoUrl(entry.id, tab);
+      setPlayback({ id: entry.id, title: entry.title, posterUrl: entry.posterUrl, tab, ...access });
       setChatOpen(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Bilinmeyen hata');
@@ -201,8 +280,8 @@ export function KatalogView() {
       return;
     }
     try {
-      const url = await fetchVideoUrl(item.lessonId, item.tab);
-      setPlayback({ id: item.lessonId, title: item.title, url, posterUrl: item.posterUrl, tab: item.tab });
+      const access = await fetchVideoUrl(item.lessonId, item.tab);
+      setPlayback({ id: item.lessonId, title: item.title, posterUrl: item.posterUrl, tab: item.tab, ...access });
       setChatMessagesByLesson((prev) => (prev[item.lessonId] ? prev : { ...prev, [item.lessonId]: [] }));
       setChatOpen(true);
     } catch (err) {
@@ -231,6 +310,11 @@ export function KatalogView() {
     }
   }
 
+  function currentPlaybackSeconds(): number {
+    if (playback?.isYoutube) return youtubePlayerRef.current?.getCurrentTime() || 0;
+    return videoRef.current?.currentTime || 0;
+  }
+
   async function sendChatMessage() {
     const question = chatInput.trim();
     if (!question || chatBusy || !playback) return;
@@ -241,7 +325,7 @@ export function KatalogView() {
         ...prev,
         [lessonId]: [...(prev[lessonId] || []), {
           role: 'assistant',
-          timestamp: formatTime(videoRef.current?.currentTime || 0),
+          timestamp: formatTime(currentPlaybackSeconds()),
           content: 'Cevap alinamadi: Sohbet için giriş yapmalısın.'
         }]
       }));
@@ -249,9 +333,11 @@ export function KatalogView() {
     }
 
     const lessonId = playback.id;
-    const timestampSeconds = videoRef.current?.currentTime || 0;
+    const timestampSeconds = currentPlaybackSeconds();
     const timestampLabel = formatTime(timestampSeconds);
-    const frame = captureVideoFrame();
+    // YouTube dersleri icin kare backend'de yt-dlp ile yakalaniyor (iframe
+    // cross-origin oldugundan canvas ile kare alinamaz).
+    const frame = playback.isYoutube ? null : captureVideoFrame();
 
     const priorHistory = (chatMessagesByLesson[lessonId] || []).filter((message) => !message.pending);
     const chatHistoryPayload = priorHistory.slice(-6).map((message) => ({
@@ -312,6 +398,42 @@ export function KatalogView() {
     }
   }
 
+  async function submitYoutubeImport() {
+    const url = importUrl.trim();
+    if (!url || importBusy) return;
+    const token = window.KARA_AUTH?.getAccessToken();
+    if (!token) {
+      setImportError('İçe aktarmak için giriş yapmalısın.');
+      return;
+    }
+    setImportBusy(true);
+    setImportError(null);
+    try {
+      const base = apiBase();
+      const response = await fetch(`${base}/api/catalog/import-youtube`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ url })
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.error || `İçe aktarılamadı (${response.status})`);
+      setEntries((prev) => [{
+        id: body.id,
+        title: body.title,
+        topic: body.topic,
+        createdAt: body.createdAt,
+        updatedAt: body.updatedAt,
+        durationSeconds: body.durationSeconds,
+        posterUrl: body.posterUrl
+      }, ...prev]);
+      setImportUrl('');
+    } catch (err) {
+      setImportError(err instanceof Error ? err.message : 'Bilinmeyen hata');
+    } finally {
+      setImportBusy(false);
+    }
+  }
+
   return (
     <section className="placeholderView katalogView hidden" id="katalogView" style={{ alignItems: 'stretch', padding: 0, minHeight: '100vh' }}>
       <div style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
@@ -331,6 +453,23 @@ export function KatalogView() {
             Derslerim
           </button>
         </div>
+
+        {tab === 'private' && (
+          <div className="katalogYoutubeImport">
+            <input
+              value={importUrl}
+              onChange={(event) => setImportUrl(event.target.value)}
+              onKeyDown={(event) => { if (event.key === 'Enter') void submitYoutubeImport(); }}
+              placeholder="YouTube video linki…"
+              className="katalogChatInput"
+              disabled={importBusy}
+            />
+            <button type="button" className="katalogOpenChatBtn" onClick={() => void submitYoutubeImport()} disabled={importBusy}>
+              {importBusy ? 'Ekleniyor…' : "YouTube'dan Ekle"}
+            </button>
+            {importError && <span className="katalogError" style={{ fontSize: 13 }}>{importError}</span>}
+          </div>
+        )}
 
         {loading && <div className="katalogStatus">Katalog yükleniyor…</div>}
         {error && <div className="katalogStatus katalogError">{error}</div>}
@@ -415,7 +554,14 @@ export function KatalogView() {
                 <strong>{playback.title}</strong>
                 <button type="button" className="katalogPlayerClose" onClick={() => { setPlayback(null); setChatOpen(false); }} aria-label="Kapat">✕</button>
               </div>
-              <video ref={videoRef} src={playback.url} controls autoPlay playsInline crossOrigin="anonymous" style={{ width: '100%', display: 'block' }} />
+
+              {playback.isYoutube ? (
+                <div className="katalogYoutubeFrame">
+                  <div ref={youtubeContainerRef} style={{ width: '100%', height: '100%' }} />
+                </div>
+              ) : (
+                <video ref={videoRef} src={playback.url || undefined} controls autoPlay playsInline crossOrigin="anonymous" style={{ width: '100%', display: 'block' }} />
+              )}
 
               {!chatOpen && (
                 <div className="katalogChatBox">

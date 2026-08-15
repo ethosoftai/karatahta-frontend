@@ -1974,3 +1974,39 @@ p {
     min-height: 220px;
   }
 }
+
+.katalogYoutubeImport {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 32px 0;
+  flex-wrap: wrap;
+}
+
+.katalogYoutubeImport .katalogChatInput {
+  max-width: 420px;
+}
+
+.katalogYoutubeFrame {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: #000;
+}
+
+.katalogYoutubeFrame > div {
+  position: absolute;
+  inset: 0;
+}
+
+@media (max-width: 720px) {
+  .katalogYoutubeImport {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .katalogYoutubeImport .katalogChatInput {
+    max-width: none;
+    flex: 1 1 100%;
+  }
+}
