@@ -1570,3 +1570,250 @@ p {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* Katalog (Netflix tarzı) bölümü */
+.katalogView {
+  background: var(--surface);
+  color: var(--text);
+}
+
+.katalogTabs {
+  display: flex;
+  gap: 8px;
+  padding: 20px 32px 0;
+}
+
+.katalogTabBtn {
+  background: var(--surface-3);
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 8px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .15s ease, color .15s ease, border-color .15s ease;
+}
+
+.katalogTabBtn:hover {
+  color: var(--text);
+}
+
+.katalogTabBtn.active {
+  background: var(--primary);
+  color: var(--primary-text);
+  border-color: var(--primary);
+}
+
+.katalogStatus {
+  padding: 24px 32px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.katalogError {
+  color: #f87171;
+}
+
+.katalogHero {
+  margin: 20px 32px 0;
+  border-radius: 16px;
+  min-height: 320px;
+  background-color: var(--surface-2);
+  background-size: cover;
+  background-position: center;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: flex-end;
+}
+
+.katalogHeroOverlay {
+  width: 100%;
+  padding: 32px;
+  background: linear-gradient(0deg, rgba(0,0,0,.85) 0%, rgba(0,0,0,.35) 55%, rgba(0,0,0,0) 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.katalogHeroTopic {
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  font-size: 12px;
+  font-weight: 700;
+  color: #9aa0ff;
+}
+
+.katalogHeroTitle {
+  font-size: clamp(24px, 4vw, 40px);
+  font-weight: 800;
+  line-height: 1.1;
+  margin: 0;
+  color: #fff;
+  max-width: 720px;
+}
+
+.katalogPlayBtn {
+  align-self: flex-start;
+  margin-top: 6px;
+  background: #fff;
+  color: #0f1011;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 22px;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.katalogPlayBtn:hover {
+  background: #e6e6e6;
+}
+
+.katalogRows {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  padding: 32px 0 60px;
+}
+
+.katalogRow {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.katalogRowLabel {
+  padding: 0 32px;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.katalogRowTrack {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding: 4px 32px 12px;
+  scroll-snap-type: x proximity;
+}
+
+.katalogRowTrack::-webkit-scrollbar {
+  height: 6px;
+}
+
+.katalogRowTrack::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 999px;
+}
+
+.katalogCard {
+  flex: 0 0 auto;
+  width: 220px;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+  scroll-snap-align: start;
+  transition: transform .15s ease;
+}
+
+.katalogCard:hover {
+  transform: scale(1.05);
+}
+
+.katalogCardPoster {
+  width: 220px;
+  height: 124px;
+  border-radius: 10px;
+  background-color: var(--surface-3);
+  background-size: cover;
+  background-position: center;
+  border: 1px solid var(--border);
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.katalogCardPosterFallback {
+  font-size: 32px;
+  font-weight: 800;
+  color: var(--muted);
+}
+
+.katalogCardDuration {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  background: rgba(0,0,0,.7);
+  color: #fff;
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.katalogCardTitle {
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.katalogPlayerOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 60;
+  padding: 24px;
+}
+
+.katalogPlayerCard {
+  background: var(--surface-2);
+  border-radius: 12px;
+  overflow: hidden;
+  max-width: 960px;
+  width: 100%;
+  border: 1px solid var(--border);
+}
+
+.katalogPlayerHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  color: var(--text);
+}
+
+.katalogPlayerClose {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.katalogPlayerClose:hover {
+  color: var(--text);
+}
+
+@media (max-width: 720px) {
+  .katalogTabs,
+  .katalogRowLabel,
+  .katalogRowTrack {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .katalogHero {
+    margin-left: 16px;
+    margin-right: 16px;
+    min-height: 220px;
+  }
+}

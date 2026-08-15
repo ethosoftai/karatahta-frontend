@@ -24,6 +24,11 @@ export function Sidebar() {
             <strong>Canlı öğretmen</strong>
           </span>
         </button>
+        <button id="katalogNavBtn" className="historyItem" type="button">
+          <span className="historyText">
+            <strong>Katalog</strong>
+          </span>
+        </button>
       </nav>
 
       <div className="sidebarLabel" id="sidebarSectionLabel">ÇALIŞMA ALANI</div>

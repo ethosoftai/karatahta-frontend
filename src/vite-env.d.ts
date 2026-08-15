@@ -13,6 +13,9 @@ declare global {
       typesetPromise?: (elements?: Element[]) => Promise<void>;
     };
     __KARA_LEGACY_LOADED__?: boolean;
+    KARA_AUTH?: {
+      getAccessToken: () => string | null;
+    };
   }
 }
 
