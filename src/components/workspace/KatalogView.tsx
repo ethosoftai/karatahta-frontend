@@ -227,11 +227,16 @@ export function KatalogView() {
     try {
       const access = await fetchVideoUrl(entry.id, tab);
       setPlayback({ id: entry.id, title: entry.title, posterUrl: entry.posterUrl, tab, ...access });
-      setChatMessagesByLesson((prev) => (prev[entry.id] ? prev : { ...prev, [entry.id]: [] }));
-      setChatOpen(true);
+      setChatOpen(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Bilinmeyen hata');
     }
+  }
+
+  function openChat() {
+    if (!playback) return;
+    setChatMessagesByLesson((prev) => (prev[playback.id] ? prev : { ...prev, [playback.id]: [] }));
+    setChatOpen(true);
   }
 
   // Sidebar geçmişindeki bir sohbet kullanıcının KENDİ dersi olabilir
@@ -536,7 +541,32 @@ export function KatalogView() {
         </>
       )}
 
-      {playback && (
+      {playback && !chatOpen && (
+        <div className="katalogPreviewOverlay" onClick={closePlayback}>
+          <div className="katalogPreviewCard" onClick={(event) => event.stopPropagation()}>
+            <div className="katalogPlayerHeader">
+              <strong>{playback.title}</strong>
+              <button type="button" className="katalogPlayerClose" onClick={closePlayback} aria-label="Kapat">✕</button>
+            </div>
+
+            {playback.isYoutube ? (
+              <div className="katalogYoutubeFrame">
+                <div ref={youtubeContainerRef} style={{ width: '100%', height: '100%' }} />
+              </div>
+            ) : (
+              <video ref={videoRef} src={playback.url || undefined} controls autoPlay playsInline crossOrigin="anonymous" style={{ width: '100%', display: 'block' }} />
+            )}
+
+            <div className="katalogChatBox">
+              <button type="button" className="katalogOpenChatBtn" onClick={openChat}>
+                Open in chat
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {playback && chatOpen && (
         <div className="katalogPlayerPage">
           <div className="katalogPlayerPageHeader">
             <button type="button" className="katalogPlayerClose" onClick={closePlayback} aria-label="Geri">←</button>
