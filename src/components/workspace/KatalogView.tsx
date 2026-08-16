@@ -227,16 +227,11 @@ export function KatalogView() {
     try {
       const access = await fetchVideoUrl(entry.id, tab);
       setPlayback({ id: entry.id, title: entry.title, posterUrl: entry.posterUrl, tab, ...access });
-      setChatOpen(false);
+      setChatMessagesByLesson((prev) => (prev[entry.id] ? prev : { ...prev, [entry.id]: [] }));
+      setChatOpen(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Bilinmeyen hata');
     }
-  }
-
-  function openChat() {
-    if (!playback) return;
-    setChatMessagesByLesson((prev) => (prev[playback.id] ? prev : { ...prev, [playback.id]: [] }));
-    setChatOpen(true);
   }
 
   // Sidebar geçmişindeki bir sohbet kullanıcının KENDİ dersi olabilir
@@ -420,8 +415,14 @@ export function KatalogView() {
     }
   }
 
+  function closePlayback() {
+    setPlayback(null);
+    setChatOpen(false);
+  }
+
   return (
     <section className="placeholderView katalogView hidden" id="katalogView" style={{ alignItems: 'stretch', padding: 0, minHeight: '100vh' }}>
+      {!playback && (
       <div style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
         <div className="katalogTabs">
           <button
@@ -492,8 +493,9 @@ export function KatalogView() {
           ))}
         </div>
       </div>
+      )}
 
-      {tab === 'private' && (
+      {!playback && tab === 'private' && (
         <>
           {importPanelOpen && (
             <div className="katalogYoutubeFab-backdrop" onClick={() => setImportPanelOpen(false)}>
@@ -535,28 +537,19 @@ export function KatalogView() {
       )}
 
       {playback && (
-        <div className="katalogPlayerOverlay" onClick={() => { setPlayback(null); setChatOpen(false); }}>
-          <div className={`katalogPlayerCard${chatOpen ? ' katalogPlayerCard-withChat' : ''}`} onClick={(event) => event.stopPropagation()}>
+        <div className="katalogPlayerPage">
+          <div className="katalogPlayerPageHeader">
+            <button type="button" className="katalogPlayerClose" onClick={closePlayback} aria-label="Geri">←</button>
+            <h2>{playback.title}</h2>
+          </div>
+          <div className="katalogPlayerCard">
             <div className="katalogPlayerMain">
-              <div className="katalogPlayerHeader">
-                <strong>{playback.title}</strong>
-                <button type="button" className="katalogPlayerClose" onClick={() => { setPlayback(null); setChatOpen(false); }} aria-label="Kapat">✕</button>
-              </div>
-
               {playback.isYoutube ? (
                 <div className="katalogYoutubeFrame">
                   <div ref={youtubeContainerRef} style={{ width: '100%', height: '100%' }} />
                 </div>
               ) : (
                 <video ref={videoRef} src={playback.url || undefined} controls autoPlay playsInline crossOrigin="anonymous" style={{ width: '100%', display: 'block' }} />
-              )}
-
-              {!chatOpen && (
-                <div className="katalogChatBox">
-                  <button type="button" className="katalogOpenChatBtn" onClick={openChat}>
-                    Open in chat
-                  </button>
-                </div>
               )}
 
               {chatOpen && (
