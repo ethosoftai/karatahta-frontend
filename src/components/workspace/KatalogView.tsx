@@ -273,6 +273,17 @@ export function KatalogView() {
     return () => window.removeEventListener('kara:open-catalog-chat', handler);
   }, []);
 
+  // Sidebar'daki "Kataloğu Keşfet" öğesi: açık bir sohbet varsa kapatıp
+  // gezinme (grid) görünümüne dön.
+  useEffect(() => {
+    function handler() {
+      setPlayback(null);
+      setChatOpen(false);
+    }
+    window.addEventListener('kara:katalog-explore', handler);
+    return () => window.removeEventListener('kara:katalog-explore', handler);
+  }, []);
+
   function captureVideoFrame(): { mimeType: string; data: string } | null {
     const video = videoRef.current;
     if (!video || video.readyState < 2) return null;
@@ -425,6 +436,13 @@ export function KatalogView() {
     setChatOpen(false);
   }
 
+  // Tam ekran sohbetten "geri" katalog gezinme (grid) ekranina degil,
+  // bir onceki adim olan video onizlemesine doner -- gride donmek icin
+  // artik sidebar'daki "Katalogu Kesfet" ogesi kullaniliyor.
+  function backToPreview() {
+    setChatOpen(false);
+  }
+
   return (
     <section className="placeholderView katalogView hidden" id="katalogView" style={{ alignItems: 'stretch', padding: 0, minHeight: '100vh' }}>
       {!playback && (
@@ -569,7 +587,7 @@ export function KatalogView() {
       {playback && chatOpen && (
         <div className="katalogPlayerPage">
           <div className="katalogPlayerPageHeader">
-            <button type="button" className="katalogPlayerClose" onClick={closePlayback} aria-label="Geri">←</button>
+            <button type="button" className="katalogPlayerClose" onClick={backToPreview} aria-label="Geri">←</button>
             <h2>{playback.title}</h2>
           </div>
           <div className="katalogPlayerCard">

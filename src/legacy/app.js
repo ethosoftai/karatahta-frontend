@@ -818,11 +818,19 @@ function updateSectionNav() {
 function renderCardHistory() {
   if (state.activeSection !== 'card') return;
   const sessions = state.cardSessions || [];
+  const newItem = `
+    <button class="historyItem" type="button" data-card-new="true">
+      <span class="historyText">
+        <strong>Yeni sohbet</strong>
+        <small>Yeni bir kart oturumu baslat</small>
+      </span>
+    </button>
+  `;
   if (!sessions.length) {
-    els.historyList.innerHTML = `<p class="historyEmpty">${escapeHtml(SECTION_META.card.emptyText)}</p>`;
+    els.historyList.innerHTML = newItem + `<p class="historyEmpty">${escapeHtml(SECTION_META.card.emptyText)}</p>`;
     return;
   }
-  els.historyList.innerHTML = sessions.map((session) => `
+  els.historyList.innerHTML = newItem + sessions.map((session) => `
     <div class="historyItem">
       <button class="historyRowBtn" type="button" data-card-session-id="${escapeHtml(session.id)}">
         <span class="historyText">
@@ -846,11 +854,19 @@ async function refreshCardHistory() {
 function renderKatalogHistory() {
   if (state.activeSection !== 'katalog') return;
   const chats = state.katalogChats || [];
+  const exploreItem = `
+    <button class="historyItem" type="button" data-katalog-explore="true">
+      <span class="historyText">
+        <strong>Kataloğu Keşfet</strong>
+        <small>Videolarda gezin</small>
+      </span>
+    </button>
+  `;
   if (!chats.length) {
-    els.historyList.innerHTML = `<p class="historyEmpty">${escapeHtml(SECTION_META.katalog.emptyText)}</p>`;
+    els.historyList.innerHTML = exploreItem + `<p class="historyEmpty">${escapeHtml(SECTION_META.katalog.emptyText)}</p>`;
     return;
   }
-  els.historyList.innerHTML = chats.map((chat) => `
+  els.historyList.innerHTML = exploreItem + chats.map((chat) => `
     <div class="historyItem">
       <button class="historyRowBtn" type="button" data-katalog-lesson-id="${escapeHtml(chat.lessonId)}">
         <span class="historyText">
@@ -3026,8 +3042,16 @@ els.historyList.addEventListener('click', (event) => {
     void loadLessonFromHistory(button.dataset.lessonId);
     return;
   }
+  if (button.dataset.cardNew) {
+    window.dispatchEvent(new CustomEvent('kara:card-new-session'));
+    return;
+  }
   if (button.dataset.cardSessionId) {
     window.dispatchEvent(new CustomEvent('kara:open-card-session', { detail: { sessionId: button.dataset.cardSessionId } }));
+    return;
+  }
+  if (button.dataset.katalogExplore) {
+    window.dispatchEvent(new CustomEvent('kara:katalog-explore'));
     return;
   }
   if (button.dataset.katalogLessonId) {

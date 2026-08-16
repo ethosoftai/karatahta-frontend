@@ -175,6 +175,23 @@ export function CardsView() {
     return () => window.removeEventListener('kara:open-card-session', handler);
   }, []);
 
+  // Sidebar'daki "Yeni sohbet" ogesi: mevcut kart oturumunu birakip
+  // bos bir oturumla basa dön.
+  useEffect(() => {
+    function handler() {
+      setSessionId(null);
+      setCards([]);
+      setFeed([]);
+      setChatHistory([]);
+      setCardsReady(false);
+      setError(null);
+      setPrompt('');
+      setQuestionImage(null);
+    }
+    window.addEventListener('kara:card-new-session', handler);
+    return () => window.removeEventListener('kara:card-new-session', handler);
+  }, []);
+
   async function send() {
     const text = prompt.trim();
     if ((!text && !questionImage) || busy) return;
