@@ -196,7 +196,7 @@ export function KatalogView() {
       });
     });
     return () => { cancelled = true; };
-  }, [playback?.id, playback?.isYoutube, playback?.youtubeVideoId]);
+  }, [playback?.id, playback?.isYoutube, playback?.youtubeVideoId, chatOpen]);
 
   const rows = useMemo(() => groupByTopic(entries), [entries]);
   const hero = entries[0] || null;
