@@ -1286,7 +1286,7 @@ async function monitorFullLessonJob(job) {
     maybeStartOrContinuePlayback();
     if (
       finalJob.result.videoUrl
-      && !state.liveManim.active
+      && !hasVisibleVideo()
       && !state.playback.playable.length
     ) {
       els.videoOutput.src = absoluteVideoUrl(finalJob.result.videoUrl);
