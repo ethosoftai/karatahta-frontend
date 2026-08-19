@@ -67,6 +67,8 @@ export function CardsView() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [isPublic, setIsPublic] = useState(false);
+  const [publishBusy, setPublishBusy] = useState(false);
 
   function apiBase() {
     return (window as { KARA_API_BASE_URL?: string }).KARA_API_BASE_URL || '';
@@ -114,6 +116,27 @@ export function CardsView() {
     }
   }
 
+  // Kataloğa ekle/kaldır: kart oturumu kaydedildikten (sessionId varken)
+  // sonra kullanılabilir. Herkese açık "Kartlar" katalog listesinde
+  // gösterilip gösterilmeyeceğini belirler.
+  async function togglePublish() {
+    if (!sessionId || publishBusy) return;
+    const nextValue = !isPublic;
+    setPublishBusy(true);
+    try {
+      const response = await fetch(`${apiBase()}/api/cards/sessions/${encodeURIComponent(sessionId)}/${nextValue ? 'publish' : 'unpublish'}`, {
+        method: 'POST',
+        headers: authHeaders()
+      });
+      if (!response.ok) throw new Error(`İşlem başarısız (${response.status})`);
+      setIsPublic(nextValue);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Bilinmeyen hata');
+    } finally {
+      setPublishBusy(false);
+    }
+  }
+
   // Follow-up messages once cards are on screen: a normal chat turn about
   // the cards just shown, same shape as ask-kara (question + history in,
   // answer text out) -- no new cards are generated here.
@@ -145,7 +168,7 @@ export function CardsView() {
       try {
         const response = await fetch(`${apiBase()}/api/cards/sessions/${encodeURIComponent(id)}`, { headers: authHeaders() });
         if (!response.ok) throw new Error(`Oturum acilamadi (${response.status})`);
-        const data: { id: string; title: string; cards: (Card & { imageUrl: string | null })[]; messages: { role: 'user' | 'assistant'; content: string }[] } = await response.json();
+        const data: { id: string; title: string; cards: (Card & { imageUrl: string | null })[]; messages: { role: 'user' | 'assistant'; content: string }[]; isPublic?: boolean } = await response.json();
         const loadedCards: Card[] = data.cards.map((card, index) => ({
           index,
           title: card.title,
@@ -163,6 +186,7 @@ export function CardsView() {
         setFeed(loadedFeed);
         setChatHistory(data.messages.map((message) => ({ role: message.role, content: message.content })));
         setCardsReady(true);
+        setIsPublic(Boolean(data.isPublic));
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Bilinmeyen hata');
       }
@@ -187,6 +211,7 @@ export function CardsView() {
       setError(null);
       setPrompt('');
       setQuestionImage(null);
+      setIsPublic(false);
     }
     window.addEventListener('kara:card-new-session', handler);
     return () => window.removeEventListener('kara:card-new-session', handler);
@@ -226,9 +251,16 @@ export function CardsView() {
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
           <strong>Kart</strong>
-          <button type="button" className="iconTextButton" disabled={feed.length === 0} onClick={() => exportFeed(feed)}>
-            Sohbeti dışa aktar
-          </button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {sessionId && (
+              <button type="button" className="iconTextButton" disabled={publishBusy} onClick={() => void togglePublish()}>
+                {publishBusy ? '…' : isPublic ? 'Kataloğu kaldır' : 'Kataloğa ekle'}
+              </button>
+            )}
+            <button type="button" className="iconTextButton" disabled={feed.length === 0} onClick={() => exportFeed(feed)}>
+              Sohbeti dışa aktar
+            </button>
+          </div>
         </div>
 
         <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 14, padding: '8px 0' }}>

@@ -11,6 +11,19 @@ type CatalogEntry = {
 };
 
 type CatalogTab = 'public' | 'private';
+type ContentType = 'lessons' | 'cards';
+
+type CardCatalogEntry = {
+  id: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  cardCount: number;
+  posterUrl: string | null;
+};
+
+type CardCatalogCard = { title: string; explanation: string; imageUrl: string | null };
+type CardSessionDetail = { id: string; title: string; cards: CardCatalogCard[] };
 
 type ChatMessage = {
   role: 'user' | 'assistant';
@@ -131,8 +144,11 @@ function safeUrl(value: string | undefined) {
 }
 
 export function KatalogView() {
+  const [contentType, setContentType] = useState<ContentType>('lessons');
   const [tab, setTab] = useState<CatalogTab>('public');
   const [entries, setEntries] = useState<CatalogEntry[]>([]);
+  const [cardEntries, setCardEntries] = useState<CardCatalogEntry[]>([]);
+  const [cardPlayback, setCardPlayback] = useState<CardSessionDetail | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [playback, setPlayback] = useState<PlaybackState | null>(null);
@@ -151,6 +167,7 @@ export function KatalogView() {
   const [importPanelOpen, setImportPanelOpen] = useState(false);
 
   useEffect(() => {
+    if (contentType !== 'lessons') return;
     let cancelled = false;
     async function load() {
       setLoading(true);
@@ -176,7 +193,56 @@ export function KatalogView() {
     }
     void load();
     return () => { cancelled = true; };
-  }, [tab]);
+  }, [tab, contentType]);
+
+  useEffect(() => {
+    if (contentType !== 'cards') return;
+    let cancelled = false;
+    async function load() {
+      setLoading(true);
+      setError(null);
+      try {
+        const base = apiBase();
+        const path = tab === 'public' ? '/api/catalog/cards' : '/api/catalog/cards/mine';
+        const headers: Record<string, string> = {};
+        if (tab === 'private') {
+          const token = window.KARA_AUTH?.getAccessToken();
+          if (!token) throw new Error('Kendi kartlarını görmek için giriş yapmalısın.');
+          headers.Authorization = `Bearer ${token}`;
+        }
+        const response = await fetch(`${base}${path}`, { headers });
+        if (!response.ok) throw new Error(`Kart kataloğu yüklenemedi (${response.status})`);
+        const data = await response.json();
+        if (!cancelled) setCardEntries(data.sessions || []);
+      } catch (err) {
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Bilinmeyen hata');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    void load();
+    return () => { cancelled = true; };
+  }, [tab, contentType]);
+
+  async function openCardSession(entry: CardCatalogEntry) {
+    try {
+      const base = apiBase();
+      const headers: Record<string, string> = {};
+      const path = tab === 'public'
+        ? `/api/catalog/cards/${encodeURIComponent(entry.id)}`
+        : `/api/cards/sessions/${encodeURIComponent(entry.id)}`;
+      if (tab === 'private') {
+        const token = window.KARA_AUTH?.getAccessToken();
+        if (token) headers.Authorization = `Bearer ${token}`;
+      }
+      const response = await fetch(`${base}${path}`, { headers });
+      if (!response.ok) throw new Error(`Kartlar açılamadı (${response.status})`);
+      const data: { id: string; title: string; cards: (CardCatalogCard & { imageStoragePath?: string })[] } = await response.json();
+      setCardPlayback({ id: data.id, title: data.title, cards: data.cards });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Bilinmeyen hata');
+    }
+  }
 
   // Mount/replace the YouTube player whenever a YouTube lesson is opened.
   useEffect(() => {
@@ -445,8 +511,24 @@ export function KatalogView() {
 
   return (
     <section className="placeholderView katalogView hidden" id="katalogView" style={{ alignItems: 'stretch', padding: 0, minHeight: '100vh' }}>
-      {!playback && (
+      {!playback && !cardPlayback && (
       <div style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
+        <div className="katalogTabs">
+          <button
+            type="button"
+            className={`katalogTabBtn${contentType === 'lessons' ? ' active' : ''}`}
+            onClick={() => setContentType('lessons')}
+          >
+            Dersler
+          </button>
+          <button
+            type="button"
+            className={`katalogTabBtn${contentType === 'cards' ? ' active' : ''}`}
+            onClick={() => setContentType('cards')}
+          >
+            Kartlar
+          </button>
+        </div>
         <div className="katalogTabs">
           <button
             type="button"
@@ -460,12 +542,15 @@ export function KatalogView() {
             className={`katalogTabBtn${tab === 'private' ? ' active' : ''}`}
             onClick={() => setTab('private')}
           >
-            Derslerim
+            {contentType === 'lessons' ? 'Derslerim' : 'Kartlarım'}
           </button>
         </div>
 
         {loading && <div className="katalogStatus">Katalog yükleniyor…</div>}
         {error && <div className="katalogStatus katalogError">{error}</div>}
+
+        {contentType === 'lessons' && (
+        <>
         {!loading && !error && entries.length === 0 && (
           <div className="katalogStatus">
             {tab === 'public' ? 'Henüz herkese açık ders yok.' : 'Henüz kendi dersin yok.'}
@@ -515,10 +600,46 @@ export function KatalogView() {
             </div>
           ))}
         </div>
+        </>
+        )}
+
+        {contentType === 'cards' && (
+        <>
+        {!loading && !error && cardEntries.length === 0 && (
+          <div className="katalogStatus">
+            {tab === 'public' ? 'Henüz herkese açık kart yok.' : 'Henüz kendi kartın yok.'}
+          </div>
+        )}
+        <div className="katalogRows">
+          <div className="katalogRow">
+            <div className="katalogRowLabel">{tab === 'public' ? 'Herkese Açık Kartlar' : 'Kartlarım'}</div>
+            <div className="katalogRowTrack">
+              {cardEntries.map((entry) => (
+                <button
+                  type="button"
+                  key={entry.id}
+                  className="katalogCard"
+                  onClick={() => void openCardSession(entry)}
+                >
+                  <div
+                    className="katalogCardPoster"
+                    style={entry.posterUrl ? { backgroundImage: `url(${entry.posterUrl})` } : undefined}
+                  >
+                    {!entry.posterUrl && <span className="katalogCardPosterFallback">{entry.title.slice(0, 1)}</span>}
+                    <span className="katalogCardDuration">{entry.cardCount} kart</span>
+                  </div>
+                  <div className="katalogCardTitle">{entry.title}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+        </>
+        )}
       </div>
       )}
 
-      {!playback && tab === 'private' && (
+      {!playback && !cardPlayback && contentType === 'lessons' && tab === 'private' && (
         <>
           {importPanelOpen && (
             <div className="katalogYoutubeFab-backdrop" onClick={() => setImportPanelOpen(false)}>
@@ -668,6 +789,28 @@ export function KatalogView() {
                   </div>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {cardPlayback && (
+        <div className="katalogPreviewOverlay" onClick={() => setCardPlayback(null)}>
+          <div className="katalogPreviewCard" onClick={(event) => event.stopPropagation()}>
+            <div className="katalogPlayerHeader">
+              <strong>{cardPlayback.title}</strong>
+              <button type="button" className="katalogPlayerClose" onClick={() => setCardPlayback(null)} aria-label="Kapat">✕</button>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14, padding: 12, overflowY: 'auto' }}>
+              {cardPlayback.cards.map((card, index) => (
+                <div key={index} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
+                  {card.imageUrl && <img src={card.imageUrl} alt={card.title} style={{ width: '100%', display: 'block' }} />}
+                  <div style={{ padding: 12 }}>
+                    <div style={{ fontWeight: 600, marginBottom: 4 }}>{card.title}</div>
+                    <div style={{ fontSize: 14, color: 'var(--muted)', lineHeight: 1.5 }}>{card.explanation}</div>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         </div>
