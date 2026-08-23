@@ -1,4 +1,4 @@
-import { useEffect, useState, type ChangeEvent } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 
 type Card = { index: number; title: string; explanation: string; imageDataUrl: string };
 type ChatTurn = { role: 'user' | 'assistant'; content: string };
@@ -6,6 +6,13 @@ type FeedItem =
   | { kind: 'user'; text: string }
   | { kind: 'card'; card: Card }
   | { kind: 'assistant'; text: string };
+
+const SUGGESTIONS = [
+  'İkinci dereceden denklemi çöz: x²-5x+6=0',
+  'Türev kurallarını örnekle anlat',
+  'Pisagor teoremini kanıtla',
+  'Kesirlerde toplama nasıl yapılır?'
+];
 
 async function* readNdjson(response: Response) {
   const reader = response.body?.getReader();
@@ -60,6 +67,7 @@ function exportFeed(feed: FeedItem[]) {
 export function CardsView() {
   const [prompt, setPrompt] = useState('');
   const [questionImage, setQuestionImage] = useState<File | null>(null);
+  const [questionImagePreview, setQuestionImagePreview] = useState<string | null>(null);
   const [feed, setFeed] = useState<FeedItem[]>([]);
   const [cards, setCards] = useState<Card[]>([]);
   const [chatHistory, setChatHistory] = useState<ChatTurn[]>([]);
@@ -69,6 +77,7 @@ export function CardsView() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [isPublic, setIsPublic] = useState(false);
   const [publishBusy, setPublishBusy] = useState(false);
+  const feedRef = useRef<HTMLDivElement | null>(null);
 
   function apiBase() {
     return (window as { KARA_API_BASE_URL?: string }).KARA_API_BASE_URL || '';
@@ -78,6 +87,21 @@ export function CardsView() {
     const token = window.KARA_AUTH?.getAccessToken();
     return token ? { Authorization: `Bearer ${token}` } : {};
   }
+
+  useEffect(() => {
+    const el = feedRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [feed, busy]);
+
+  useEffect(() => {
+    if (!questionImage) {
+      setQuestionImagePreview(null);
+      return;
+    }
+    const url = URL.createObjectURL(questionImage);
+    setQuestionImagePreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [questionImage]);
 
   // First message: generates the card sequence. Accepts a typed topic/
   // question and/or a question photo (transcribed to text on the backend).
@@ -242,105 +266,131 @@ export function CardsView() {
     setQuestionImage(file);
   }
 
+  const totalCards = cards.length;
+
   return (
-    <section className="placeholderView hidden" id="cardView" style={{ alignItems: 'stretch', padding: 0, minHeight: '100vh' }}>
-      <div style={{
-        display: 'flex', flexDirection: 'column', width: '100%', height: '100%', maxWidth: 720, margin: '0 auto',
-        padding: 16, boxSizing: 'border-box'
-      }}
-      >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-          <strong>Kart</strong>
-          <div style={{ display: 'flex', gap: 8 }}>
+    <section className="placeholderView cardsView hidden" id="cardView">
+      <div className="cardsViewInner">
+        <div className="cardsViewHeader">
+          <div className="cardsViewHeaderTitle">
+            <strong>Kart</strong>
+            <span>
+              {cardsReady
+                ? `${totalCards} kart · ${isPublic ? 'Katalogda yayında' : 'Taslak'}`
+                : 'Soru ya da konu ile yeni bir kart dizisi başlat'}
+            </span>
+          </div>
+          <div className="cardsViewHeaderActions">
             {sessionId && (
-              <button type="button" className="iconTextButton" disabled={publishBusy} onClick={() => void togglePublish()}>
+              <button
+                type="button"
+                className={`iconTextButton cardsPublishBtn${isPublic ? ' isPublic' : ''}`}
+                disabled={publishBusy}
+                onClick={() => void togglePublish()}
+              >
                 {publishBusy ? '…' : isPublic ? 'Kataloğu kaldır' : 'Kataloğa ekle'}
               </button>
             )}
             <button type="button" className="iconTextButton" disabled={feed.length === 0} onClick={() => exportFeed(feed)}>
-              Sohbeti dışa aktar
+              Dışa aktar
             </button>
           </div>
         </div>
 
-        <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 14, padding: '8px 0' }}>
+        <div className="cardsFeed" ref={feedRef}>
           {feed.length === 0 && (
-            <p style={{ color: 'var(--muted)', fontSize: 14 }}>
-              Bir soru veya konu yaz, örn. &quot;ikinci dereceden denklemi çöz: x²-5x+6=0&quot; — kartlar sırayla
-              üretilsin. İstersen soru metni yerine bir soru fotoğrafı da ekleyebilirsin.
-            </p>
+            <div className="cardsEmpty">
+              <div className="cardsEmptyIcon">
+                <svg viewBox="0 0 24 24">
+                  <rect x="3" y="4" width="18" height="13" rx="3" />
+                  <path d="M7 21h10M12 17v4" />
+                </svg>
+              </div>
+              <h3>Bir soru sor, kartlarla öğren</h3>
+              <p>
+                Bir soru ya da konu yaz — örn. &quot;ikinci dereceden denklemi çöz: x²-5x+6=0&quot; — kartlar
+                sırayla üretilsin. İstersen soru metni yerine bir soru fotoğrafı da ekleyebilirsin.
+              </p>
+              <div className="cardsSuggestions">
+                {SUGGESTIONS.map((suggestion) => (
+                  <button key={suggestion} type="button" onClick={() => setPrompt(suggestion)}>
+                    {suggestion}
+                  </button>
+                ))}
+              </div>
+            </div>
           )}
           {feed.map((item, i) => {
             if (item.kind === 'user') {
               return (
-                <div key={i} style={{
-                  alignSelf: 'flex-end', background: 'var(--primary)', color: 'var(--primary-text)',
-                  padding: '8px 12px', borderRadius: 10, maxWidth: '85%', fontSize: 14
-                }}
-                >
-                  {item.text}
+                <div key={i} className="cardsBubbleRow user">
+                  <div className="cardsBubble user">{item.text}</div>
                 </div>
               );
             }
             if (item.kind === 'assistant') {
               return (
-                <div key={i} style={{
-                  alignSelf: 'flex-start', background: 'var(--surface-2)', color: 'var(--text)',
-                  padding: '8px 12px', borderRadius: 10, maxWidth: '90%', fontSize: 14, lineHeight: 1.4
-                }}
-                >
-                  {item.text}
+                <div key={i} className="cardsBubbleRow assistant">
+                  <div className="cardsBubble assistant">{item.text}</div>
                 </div>
               );
             }
             return (
-              <div key={i} style={{
-                background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12,
-                overflow: 'hidden'
-              }}
-              >
-                <img src={item.card.imageDataUrl} alt={item.card.title} style={{ width: '100%', display: 'block' }} />
-                <div style={{ padding: 12 }}>
-                  <div style={{ fontWeight: 600, marginBottom: 4 }}>{item.card.title}</div>
-                  <div style={{ fontSize: 14, color: 'var(--muted)', lineHeight: 1.5 }}>{item.card.explanation}</div>
+              <div key={i} className="cardsCard">
+                <div className="cardsCardMedia">
+                  {item.card.imageDataUrl ? (
+                    <img src={item.card.imageDataUrl} alt={item.card.title} />
+                  ) : (
+                    <div className="cardsCardMediaFallback">Görsel yok</div>
+                  )}
+                  <span className="cardsCardBadge">Kart {item.card.index + 1}</span>
+                </div>
+                <div className="cardsCardBody">
+                  <div className="cardsCardTitle">{item.card.title}</div>
+                  <div className="cardsCardExplanation">{item.card.explanation}</div>
                 </div>
               </div>
             );
           })}
-          {busy && <div style={{ color: 'var(--muted)', fontSize: 13 }}>{cardsReady ? 'Cevap yazılıyor…' : 'Kart üretiliyor…'}</div>}
-          {error && <div style={{ color: '#f87171', fontSize: 13 }}>{error}</div>}
+          {busy && (
+            <div className="cardsStatusRow">
+              <span className="typingDots"><i /><i /><i /></span>
+              {cardsReady ? 'Cevap yazılıyor…' : 'Kart üretiliyor…'}
+            </div>
+          )}
+          {error && <div className="cardsErrorBanner">{error}</div>}
         </div>
 
-        {!cardsReady && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, fontSize: 13, color: 'var(--muted)' }}>
-            <label className="iconTextButton" style={{ cursor: 'pointer' }}>
-              Soru fotoğrafı ekle
-              <input type="file" accept="image/*" onChange={onPickImage} style={{ display: 'none' }} />
-            </label>
-            {questionImage && (
-              <>
-                <span>{questionImage.name}</span>
-                <button type="button" className="iconTextButton" onClick={() => setQuestionImage(null)}>
-                  Kaldır
-                </button>
-              </>
-            )}
+        {!cardsReady && questionImage && (
+          <div className="cardsAttachmentPreview">
+            {questionImagePreview && <img src={questionImagePreview} alt="" />}
+            <span>{questionImage.name}</span>
+            <button type="button" className="cardsAttachmentRemove" onClick={() => setQuestionImage(null)} aria-label="Fotoğrafı kaldır">
+              ×
+            </button>
           </div>
         )}
 
-        <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+        <div className="cardsComposer">
+          {!cardsReady && (
+            <label className="cardsAttachBtn" title="Soru fotoğrafı ekle">
+              <svg viewBox="0 0 24 24">
+                <path d="M21 15v3a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3v-3M17 8l-5-5-5 5M12 3v13" />
+              </svg>
+              <input type="file" accept="image/*" onChange={onPickImage} style={{ display: 'none' }} />
+            </label>
+          )}
           <input
+            className="cardsComposerInput"
             value={prompt}
             onChange={(event) => setPrompt(event.target.value)}
             onKeyDown={(event) => { if (event.key === 'Enter') void send(); }}
             placeholder={cardsReady ? 'Kartlarla ilgili takip sorusu sor…' : 'Soru veya konu yaz…'}
-            style={{
-              flex: 1, background: 'var(--surface-3)', border: '1px solid var(--border)',
-              borderRadius: 8, padding: '8px 10px', color: 'var(--text)'
-            }}
           />
-          <button type="button" onClick={() => void send()} disabled={busy} className="primaryAction">
-            Gönder
+          <button type="button" onClick={() => void send()} disabled={busy || (!prompt.trim() && !questionImage)} className="cardsSendBtn" aria-label="Gönder">
+            <svg viewBox="0 0 24 24">
+              <path d="M5 12h14M13 6l6 6-6 6" />
+            </svg>
           </button>
         </div>
       </div>
