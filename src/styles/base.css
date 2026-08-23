@@ -2198,6 +2198,10 @@ p {
   scroll-behavior: smooth;
 }
 
+.cardsFeed > * {
+  flex-shrink: 0;
+}
+
 .cardsEmpty {
   flex: 1;
   display: flex;
