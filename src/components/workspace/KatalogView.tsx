@@ -706,7 +706,7 @@ export function KatalogView() {
                   onChange={(event) => setImportUrl(event.target.value)}
                   onKeyDown={(event) => { if (event.key === 'Enter') void submitYoutubeImport(); }}
                   placeholder="YouTube video linki…"
-                  className="katalogChatInput"
+                  className="katalogImportInput"
                   disabled={importBusy}
                   autoFocus
                 />
@@ -836,8 +836,10 @@ export function KatalogView() {
                       className="katalogChatInput"
                       disabled={chatBusy}
                     />
-                    <button type="button" className="primaryAction" onClick={() => void sendChatMessage()} disabled={chatBusy}>
-                      Gönder
+                    <button type="button" className="cardsSendBtn" onClick={() => void sendChatMessage()} disabled={chatBusy} aria-label="Gönder">
+                      <svg viewBox="0 0 24 24">
+                        <path d="M5 12h14M13 6l6 6-6 6" />
+                      </svg>
                     </button>
                   </div>
                 </div>

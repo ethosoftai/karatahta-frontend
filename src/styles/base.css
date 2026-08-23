@@ -1046,6 +1046,11 @@ p {
   border-radius: 999px;
   background: var(--surface);
   box-shadow: 0 16px 34px rgba(0, 0, 0, 0.18);
+  transition: border-color 0.15s ease;
+}
+
+.karaAskForm:focus-within {
+  border-color: var(--primary);
 }
 
 .karaAskForm.hidden {
@@ -1137,7 +1142,6 @@ p {
   display: grid;
   gap: 12px;
   padding: 16px 0 0;
-  font-family: Georgia, "Times New Roman", serif;
 }
 
 .karaChat.hidden {
@@ -1145,31 +1149,42 @@ p {
 }
 
 .chatMessage {
-  max-width: min(820px, 100%);
-  padding: 12px 14px;
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  background: var(--surface);
-  line-height: 1.55;
-  font-size: 15px;
+  max-width: min(82%, 640px);
+  padding: 10px 14px;
+  border-radius: 16px;
+  line-height: 1.5;
+  font-size: 14px;
 }
 
 .chatMessage.user {
-  justify-self: end;
-  background: var(--primary-soft);
-  border-color: rgba(79, 142, 247, 0.34);
+  margin-left: auto;
+  background: var(--primary);
+  color: var(--primary-text);
+  border-bottom-right-radius: 5px;
 }
 
 .chatMessage.assistant {
-  justify-self: start;
+  margin-right: auto;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-bottom-left-radius: 5px;
+}
+
+.chatMessage.pending {
+  color: var(--text);
 }
 
 .chatMeta {
   margin-bottom: 6px;
-  color: var(--muted);
-  font-family: Ubuntu, ui-sans-serif, system-ui, sans-serif;
-  font-size: 12px;
+  color: inherit;
+  opacity: 0.62;
+  font-size: 11.5px;
   font-weight: 700;
+}
+
+.chatMessage.user .chatMeta {
+  color: var(--primary-text);
 }
 
 .chatContent p {
@@ -1996,20 +2011,60 @@ p {
   gap: 12px;
 }
 
+.katalogChatMessages > * {
+  flex-shrink: 0;
+}
+
 .katalogChatInputRow {
   display: flex;
-  gap: 8px;
-  padding: 12px 16px;
-  border-top: 1px solid var(--border);
+  align-items: center;
+  gap: 6px;
+  margin: 0 16px 14px;
+  padding: 6px 6px 6px 16px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  transition: border-color 0.15s ease;
+}
+
+.katalogChatInputRow:focus-within {
+  border-color: var(--primary);
 }
 
 .katalogChatInput {
   flex: 1;
-  background: var(--surface-3);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 8px 10px;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  padding: 8px 4px;
   color: var(--text);
+  font-size: 14.5px;
+}
+
+.katalogChatInput::placeholder {
+  color: var(--muted);
+}
+
+.katalogImportInput {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-3);
+  color: var(--text);
+  padding: 0 12px;
+  font-size: 13.5px;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.katalogImportInput::placeholder {
+  color: var(--muted);
+}
+
+.katalogImportInput:focus {
+  border-color: var(--primary);
 }
 
 @media (max-width: 720px) {
