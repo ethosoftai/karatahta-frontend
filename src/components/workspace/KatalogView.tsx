@@ -513,51 +513,89 @@ export function KatalogView() {
     <section className="placeholderView katalogView hidden" id="katalogView" style={{ alignItems: 'stretch', padding: 0, minHeight: '100vh' }}>
       {!playback && !cardPlayback && (
       <div style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
-        <div className="katalogTabs">
-          <button
-            type="button"
-            className={`katalogTabBtn${contentType === 'lessons' ? ' active' : ''}`}
-            onClick={() => setContentType('lessons')}
-          >
-            Dersler
-          </button>
-          <button
-            type="button"
-            className={`katalogTabBtn${contentType === 'cards' ? ' active' : ''}`}
-            onClick={() => setContentType('cards')}
-          >
-            Kartlar
-          </button>
-        </div>
-        <div className="katalogTabs">
-          <button
-            type="button"
-            className={`katalogTabBtn${tab === 'public' ? ' active' : ''}`}
-            onClick={() => setTab('public')}
-          >
-            Herkese Açık
-          </button>
-          <button
-            type="button"
-            className={`katalogTabBtn${tab === 'private' ? ' active' : ''}`}
-            onClick={() => setTab('private')}
-          >
-            {contentType === 'lessons' ? 'Derslerim' : 'Kartlarım'}
-          </button>
+        <div className="katalogHeaderBar">
+          <div className="katalogHeaderTitle">
+            <strong>Katalog</strong>
+            <span>
+              {contentType === 'lessons' ? `${entries.length} ders` : `${cardEntries.length} kart seti`}
+              {' · '}
+              {tab === 'public' ? 'Herkese açık' : 'Kendi içeriğim'}
+            </span>
+          </div>
+          <div className="katalogHeaderControls">
+            <div className="segmented">
+              <button
+                type="button"
+                className={`chip${contentType === 'lessons' ? ' active' : ''}`}
+                onClick={() => setContentType('lessons')}
+              >
+                Dersler
+              </button>
+              <button
+                type="button"
+                className={`chip${contentType === 'cards' ? ' active' : ''}`}
+                onClick={() => setContentType('cards')}
+              >
+                Kartlar
+              </button>
+            </div>
+            <div className="segmented">
+              <button
+                type="button"
+                className={`chip${tab === 'public' ? ' active' : ''}`}
+                onClick={() => setTab('public')}
+              >
+                Herkese Açık
+              </button>
+              <button
+                type="button"
+                className={`chip${tab === 'private' ? ' active' : ''}`}
+                onClick={() => setTab('private')}
+              >
+                {contentType === 'lessons' ? 'Derslerim' : 'Kartlarım'}
+              </button>
+            </div>
+          </div>
         </div>
 
-        {loading && <div className="katalogStatus">Katalog yükleniyor…</div>}
         {error && <div className="katalogStatus katalogError">{error}</div>}
+
+        {loading && (
+          <div className="katalogSkeletonTrack">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div className="katalogSkeletonCard" key={i}>
+                <div className="katalogSkeletonPoster" />
+                <div className="katalogSkeletonLine" />
+              </div>
+            ))}
+          </div>
+        )}
 
         {contentType === 'lessons' && (
         <>
         {!loading && !error && entries.length === 0 && (
-          <div className="katalogStatus">
-            {tab === 'public' ? 'Henüz herkese açık ders yok.' : 'Henüz kendi dersin yok.'}
+          <div className="katalogEmpty">
+            <div className="katalogEmptyIcon">
+              <svg viewBox="0 0 24 24">
+                <rect x="3" y="5" width="18" height="13" rx="2.5" />
+                <path d="M10 9.5v4l3.5-2z" />
+              </svg>
+            </div>
+            <h3>{tab === 'public' ? 'Henüz herkese açık ders yok' : 'Henüz kendi dersin yok'}</h3>
+            <p>
+              {tab === 'public'
+                ? 'Herkese açık dersler burada listelenecek. Bir kart oturumunu ya da dersi yayınladığında burada görünür.'
+                : 'YouTube’dan bir video içe aktararak ya da bir kart oturumunu kaydederek ilk dersini oluşturabilirsin.'}
+            </p>
+            {tab === 'private' && (
+              <button type="button" className="katalogEmptyAction" onClick={() => setImportPanelOpen(true)}>
+                YouTube’dan Ekle
+              </button>
+            )}
           </div>
         )}
 
-        {hero && (
+        {!loading && hero && (
           <div
             className="katalogHero"
             style={hero.posterUrl ? { backgroundImage: `url(${hero.posterUrl})` } : undefined}
@@ -572,6 +610,7 @@ export function KatalogView() {
           </div>
         )}
 
+        {!loading && (
         <div className="katalogRows">
           {rows.map((row) => (
             <div key={row.key} className="katalogRow">
@@ -600,16 +639,29 @@ export function KatalogView() {
             </div>
           ))}
         </div>
+        )}
         </>
         )}
 
         {contentType === 'cards' && (
         <>
         {!loading && !error && cardEntries.length === 0 && (
-          <div className="katalogStatus">
-            {tab === 'public' ? 'Henüz herkese açık kart yok.' : 'Henüz kendi kartın yok.'}
+          <div className="katalogEmpty">
+            <div className="katalogEmptyIcon">
+              <svg viewBox="0 0 24 24">
+                <rect x="3" y="4" width="18" height="13" rx="3" />
+                <path d="M7 21h10M12 17v4" />
+              </svg>
+            </div>
+            <h3>{tab === 'public' ? 'Henüz herkese açık kart yok' : 'Henüz kendi kartın yok'}</h3>
+            <p>
+              {tab === 'public'
+                ? 'Herkese açık kart oturumları burada listelenecek.'
+                : 'Kart bölümünde bir soru ya da konu üzerine kart oturumu oluşturup kataloğa ekleyebilirsin.'}
+            </p>
           </div>
         )}
+        {!loading && (
         <div className="katalogRows">
           <div className="katalogRow">
             <div className="katalogRowLabel">{tab === 'public' ? 'Herkese Açık Kartlar' : 'Kartlarım'}</div>
@@ -634,6 +686,7 @@ export function KatalogView() {
             </div>
           </div>
         </div>
+        )}
         </>
         )}
       </div>
@@ -801,13 +854,18 @@ export function KatalogView() {
               <strong>{cardPlayback.title}</strong>
               <button type="button" className="katalogPlayerClose" onClick={() => setCardPlayback(null)} aria-label="Kapat">✕</button>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14, padding: 12, overflowY: 'auto' }}>
+            <div className="katalogCardPlaybackList">
               {cardPlayback.cards.map((card, index) => (
-                <div key={index} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
-                  {card.imageUrl && <img src={card.imageUrl} alt={card.title} style={{ width: '100%', display: 'block' }} />}
-                  <div style={{ padding: 12 }}>
-                    <div style={{ fontWeight: 600, marginBottom: 4 }}>{card.title}</div>
-                    <div style={{ fontSize: 14, color: 'var(--muted)', lineHeight: 1.5 }}>{card.explanation}</div>
+                <div key={index} className="cardsCard">
+                  {card.imageUrl && (
+                    <div className="cardsCardMedia">
+                      <img src={card.imageUrl} alt={card.title} />
+                      <span className="cardsCardBadge">Kart {index + 1}</span>
+                    </div>
+                  )}
+                  <div className="cardsCardBody">
+                    <div className="cardsCardTitle">{card.title}</div>
+                    <div className="cardsCardExplanation">{card.explanation}</div>
                   </div>
                 </div>
               ))}

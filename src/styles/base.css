@@ -1577,38 +1577,145 @@ p {
   color: var(--text);
 }
 
-.katalogTabs {
+.katalogHeaderBar {
   display: flex;
-  gap: 8px;
-  padding: 20px 32px 0;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 20px 32px 16px;
+  border-bottom: 1px solid var(--border);
 }
 
-.katalogTabBtn {
-  background: var(--surface-3);
+.katalogHeaderTitle {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.katalogHeaderTitle strong {
+  font-size: 17px;
+  font-weight: 750;
+}
+
+.katalogHeaderTitle span {
   color: var(--muted);
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 8px 18px;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background .15s ease, color .15s ease, border-color .15s ease;
+  font-size: 12.5px;
 }
 
-.katalogTabBtn:hover {
-  color: var(--text);
-}
-
-.katalogTabBtn.active {
-  background: var(--primary);
-  color: var(--primary-text);
-  border-color: var(--primary);
+.katalogHeaderControls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .katalogStatus {
   padding: 24px 32px;
   color: var(--muted);
   font-size: 14px;
+}
+
+.katalogEmpty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 56px 32px;
+  text-align: center;
+}
+
+.katalogEmptyIcon {
+  width: 50px;
+  height: 50px;
+  display: grid;
+  place-items: center;
+  border-radius: 16px;
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
+.katalogEmptyIcon svg {
+  width: 24px;
+  height: 24px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.katalogEmpty h3 {
+  font-size: 17px;
+  font-weight: 750;
+}
+
+.katalogEmpty p {
+  max-width: 380px;
+  color: var(--muted);
+  font-size: 13.5px;
+  line-height: 1.6;
+}
+
+.katalogEmptyAction {
+  min-height: 38px;
+  border: 1px solid var(--primary);
+  border-radius: 999px;
+  background: var(--primary);
+  color: var(--primary-text);
+  padding: 0 18px;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.katalogSkeletonTrack {
+  display: flex;
+  gap: 12px;
+  padding: 4px 32px 12px;
+  overflow: hidden;
+}
+
+.katalogSkeletonCard {
+  flex: 0 0 auto;
+  width: 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.katalogSkeletonPoster,
+.katalogSkeletonLine {
+  border-radius: 10px;
+  background: linear-gradient(100deg, var(--surface-3) 30%, var(--surface-2) 50%, var(--surface-3) 70%);
+  background-size: 200% 100%;
+  animation: katalogShimmer 1.5s ease-in-out infinite;
+}
+
+.katalogSkeletonPoster {
+  width: 220px;
+  height: 124px;
+}
+
+.katalogSkeletonLine {
+  width: 70%;
+  height: 12px;
+  border-radius: 4px;
+}
+
+@keyframes katalogShimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.katalogCardPlaybackList {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 14px;
+  overflow-y: auto;
 }
 
 .katalogError {
@@ -1912,11 +2019,29 @@ p {
 }
 
 @media (max-width: 720px) {
-  .katalogTabs,
+  .katalogHeaderBar,
   .katalogRowLabel,
-  .katalogRowTrack {
+  .katalogRowTrack,
+  .katalogSkeletonTrack {
     padding-left: 16px;
     padding-right: 16px;
+  }
+
+  .katalogHeaderBar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .katalogHeaderControls {
+    justify-content: space-between;
+  }
+
+  .katalogHeaderControls .segmented {
+    flex: 1;
+  }
+
+  .katalogHeaderControls .chip {
+    flex: 1;
   }
 
   .katalogHero {
@@ -2184,21 +2309,20 @@ p {
 .cardsCardMedia {
   position: relative;
   width: 100%;
-  aspect-ratio: 16 / 10;
   background: var(--surface-3);
   overflow: hidden;
 }
 
 .cardsCardMedia img {
   width: 100%;
-  height: 100%;
+  height: auto;
   display: block;
-  object-fit: cover;
+  object-fit: contain;
 }
 
 .cardsCardMediaFallback {
   width: 100%;
-  height: 100%;
+  min-height: 140px;
   display: grid;
   place-items: center;
   color: var(--muted);
