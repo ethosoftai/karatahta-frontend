@@ -1383,10 +1383,23 @@ p {
 }
 
 #planOutput,
-#speechOutput,
-.segmentDetail {
+#speechOutput {
   padding: 14px;
   line-height: 1.55;
+}
+
+.segmentDetail {
+  margin: 12px 14px 14px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface);
+  line-height: 1.55;
+}
+
+.segmentDetail.empty {
+  color: var(--muted);
+  text-align: center;
 }
 
 #planOutput strong,
@@ -1403,17 +1416,26 @@ p {
 
 .segmentTab {
   flex: 0 0 auto;
-  min-width: 78px;
+  min-width: 44px;
   height: 34px;
+  padding: 0 14px;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 999px;
   background: var(--surface-2);
   color: var(--muted);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.segmentTab:hover {
+  border-color: #555555;
+  color: var(--text);
 }
 
 .segmentTab.active {
   border-color: var(--primary);
-  color: var(--primary);
+  background: var(--primary);
+  color: var(--primary-text);
 }
 
 .developerDetails {

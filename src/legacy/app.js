@@ -64,6 +64,7 @@ const state = {
   lessonSearch: '',
   plan: null,
   lessonId: null,
+  lastFullPlanReadyAt: null,
   selectedSegment: null,
   speechBySegment: new Map(),
   playback: {
@@ -760,6 +761,7 @@ function beginNewLesson() {
   lessonLoadVersion += 1;
   state.plan = null;
   state.lessonId = null;
+  state.lastFullPlanReadyAt = null;
   state.selectedSegment = null;
   state.speechBySegment = new Map();
   resetProgressivePlayback();
@@ -2600,7 +2602,16 @@ async function pollFullVideoJob(jobId) {
 function applyFullVideoJobUpdate(job) {
   const incomingPlanCount = job.plan?.segments?.length || 0;
   const currentPlanCount = state.plan?.segments?.length || 0;
-  if (incomingPlanCount > currentPlanCount) {
+  // Segments stream in one at a time (count strictly increases) until the
+  // backend's fullPlanReadyTask swaps job.plan for the fully re-normalized
+  // plan (server.js's runFullVideoJob, job.plan = fullPlan) -- at that swap
+  // the segment count is usually unchanged (every segment was already
+  // streamed individually), so the count-only check below would otherwise
+  // silently skip picking up that corrected, final plan.
+  const fullPlanReadyAt = job.timings?.fullPlanReadyAt || null;
+  const fullPlanJustReady = Boolean(fullPlanReadyAt) && fullPlanReadyAt !== state.lastFullPlanReadyAt;
+  if (incomingPlanCount > currentPlanCount || fullPlanJustReady) {
+    state.lastFullPlanReadyAt = fullPlanReadyAt || state.lastFullPlanReadyAt;
     const selectedId = state.selectedSegment?.id;
     state.plan = job.plan;
     state.lessonId = job.plan?._lesson_id || state.lessonId;
