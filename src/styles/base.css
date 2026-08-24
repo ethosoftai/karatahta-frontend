@@ -445,28 +445,28 @@ p {
 
 .settingsField {
   display: grid;
-  gap: 4px;
+  gap: 6px;
 }
 
 .settingsField span {
   color: var(--muted);
-  font-size: 10px;
+  font-size: 12.5px;
 }
 
 .settingsField select,
 .settingsField input[type="text"],
 .settingsField input[type="number"] {
-  min-height: 32px;
+  min-height: 40px;
   border: 1px solid var(--border);
-  border-radius: 7px;
+  border-radius: 9px;
   background: var(--surface-2);
   color: var(--text);
-  padding: 0 8px;
-  font-size: 12px;
+  padding: 0 12px;
+  font-size: 14px;
 }
 
 .settingsFieldRange {
-  gap: 2px;
+  gap: 4px;
 }
 
 .settingsField input[type="range"] {
@@ -474,13 +474,44 @@ p {
   accent-color: var(--primary);
 }
 
-#settingsResetBtn {
-  min-height: 30px;
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  background: transparent;
-  color: var(--text);
-  font-size: 10px;
+.settingsView {
+  min-height: 100vh;
+  padding: 0;
+  align-items: stretch;
+}
+
+.settingsViewInner {
+  display: flex;
+  flex-direction: column;
+  gap: 26px;
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 24px 20px 48px;
+  box-sizing: border-box;
+}
+
+.settingsViewHeader {
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.settingsViewHeader strong {
+  font-size: 20px;
+  font-weight: 750;
+}
+
+.settingsGroup {
+  display: grid;
+  gap: 12px;
+}
+
+.settingsGroup > p {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .historyItem strong,

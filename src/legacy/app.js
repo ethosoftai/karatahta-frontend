@@ -157,12 +157,14 @@ const els = {
   cardNavBtn: document.querySelector('#cardNavBtn'),
   katalogNavBtn: document.querySelector('#katalogNavBtn'),
   karatahtaNavBtn: document.querySelector('#karatahtaNavBtn'),
+  settingsNavBtn: document.querySelector('#settingsNavBtn'),
   sidebarSectionLabel: document.querySelector('#sidebarSectionLabel'),
   historyList: document.querySelector('.historyList'),
   homeView: document.querySelector('#homeView'),
   studioView: document.querySelector('#studioView'),
   cardView: document.querySelector('#cardView'),
   katalogView: document.querySelector('#katalogView'),
+  settingsView: document.querySelector('#settingsView'),
   configText: document.querySelector('#configText'),
   statusText: document.querySelector('#statusText'),
   topicInput: document.querySelector('#topicInput'),
@@ -531,6 +533,7 @@ function hideAllMainViews() {
   els.studioView.classList.add('hidden');
   els.cardView.classList.add('hidden');
   els.katalogView.classList.add('hidden');
+  els.settingsView.classList.add('hidden');
 }
 
 function showStudio() {
@@ -551,6 +554,11 @@ function showCard() {
 function showKatalog() {
   hideAllMainViews();
   els.katalogView.classList.remove('hidden');
+}
+
+function showSettings() {
+  hideAllMainViews();
+  els.settingsView.classList.remove('hidden');
 }
 
 function setActiveChip(groupSelector, activeButton) {
@@ -808,13 +816,15 @@ function renderLessonHistory() {
 const SECTION_META = {
   karatahta: { label: 'ÇALIŞMA ALANI', emptyText: null },
   card: { label: 'KART GEÇMİŞİ', emptyText: 'Henüz geçmiş yok.' },
-  katalog: { label: 'KATALOG', emptyText: 'Henüz geçmiş yok.' }
+  katalog: { label: 'KATALOG', emptyText: 'Henüz geçmiş yok.' },
+  settings: { label: 'AYARLAR', emptyText: null }
 };
 
 function updateSectionNav() {
   els.karatahtaNavBtn.classList.toggle('active', state.activeSection === 'karatahta');
   els.cardNavBtn.classList.toggle('active', state.activeSection === 'card');
   els.katalogNavBtn.classList.toggle('active', state.activeSection === 'katalog');
+  els.settingsNavBtn.classList.toggle('active', state.activeSection === 'settings');
 }
 
 function renderCardHistory() {
@@ -918,6 +928,8 @@ function setActiveSection(section) {
     showCard();
   } else if (section === 'katalog') {
     showKatalog();
+  } else if (section === 'settings') {
+    showSettings();
   } else {
     state.lessonId ? showStudio() : showHome();
   }
@@ -3095,6 +3107,7 @@ els.karatahtaNavBtn.addEventListener('click', () => {
 });
 els.cardNavBtn.addEventListener('click', () => setActiveSection('card'));
 els.katalogNavBtn.addEventListener('click', () => setActiveSection('katalog'));
+els.settingsNavBtn.addEventListener('click', () => setActiveSection('settings'));
 
 els.historyList.addEventListener('input', (event) => {
   if (event.target?.id !== 'lessonSearchInput') {

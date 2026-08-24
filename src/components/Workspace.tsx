@@ -2,6 +2,7 @@ import { CardsView } from './workspace/CardsView';
 import { HomeView } from './workspace/HomeView';
 import { KatalogView } from './workspace/KatalogView';
 import { Sidebar } from './workspace/Sidebar';
+import { SettingsView } from './workspace/SettingsView';
 import { StudioView } from './workspace/StudioView';
 
 export function Workspace() {
@@ -13,6 +14,7 @@ export function Workspace() {
         <StudioView />
         <CardsView />
         <KatalogView />
+        <SettingsView />
       </main>
       <div id="workspaceLoading" className="workspaceLoading hidden" role="status" aria-live="polite">
         <div className="workspaceLoadingCard">
