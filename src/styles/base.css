@@ -492,26 +492,102 @@ p {
 }
 
 .settingsViewHeader {
-  padding-bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding-bottom: 20px;
   border-bottom: 1px solid var(--border);
 }
 
+.settingsViewHeaderIcon {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
+.settingsViewHeaderIcon svg {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .settingsViewHeader strong {
-  font-size: 20px;
+  display: block;
+  font-size: 19px;
   font-weight: 750;
 }
 
-.settingsGroup {
-  display: grid;
-  gap: 12px;
+.settingsViewHeader span {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 12.5px;
 }
 
-.settingsGroup > p {
-  color: var(--muted);
-  font-size: 11px;
+.settingsCard {
+  display: grid;
+  gap: 14px;
+  padding: 18px 20px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface);
+}
+
+.settingsCardHeader {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.settingsCardHeader strong {
+  font-size: 14.5px;
   font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+}
+
+.settingsCardIcon {
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  background: var(--surface-2);
+  color: var(--primary);
+}
+
+.settingsCardIcon svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.settingsFieldGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.settingsResetBtn {
+  justify-self: start;
+}
+
+@media (max-width: 560px) {
+  .settingsFieldGrid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .historyItem strong,
@@ -548,28 +624,23 @@ p {
 }
 
 .userBlock {
-  display: grid;
-  gap: 8px;
-  padding: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 12px;
   background: var(--surface-3);
 }
 
 .userBlock span {
+  min-width: 0;
   overflow: hidden;
-  color: var(--muted);
-  font-size: 12px;
+  color: var(--text);
+  font-size: 13.5px;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.userBlock button {
-  min-height: 30px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface-2);
-  color: var(--text);
 }
 
 .planCurrent {
@@ -600,14 +671,15 @@ p {
   gap: 4px;
   min-width: 140px;
   flex: 1 1 140px;
-  padding: 12px;
+  padding: 14px;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 12px;
   background: var(--surface-2);
 }
 
 .planCard.active {
   border-color: var(--primary);
+  background: var(--primary-soft);
 }
 
 .planCard .planPrice {
@@ -625,7 +697,7 @@ p {
   padding: 2px 8px;
   border-radius: 999px;
   background: var(--primary);
-  color: var(--surface-1, #fff);
+  color: var(--primary-text);
   font-size: 10px;
   font-weight: 700;
   text-transform: uppercase;
