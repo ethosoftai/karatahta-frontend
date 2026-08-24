@@ -153,6 +153,9 @@ const els = {
   authSpamHint: document.querySelector('#authSpamHint'),
   userEmailText: document.querySelector('#userEmailText'),
   logoutBtn: document.querySelector('#logoutBtn'),
+  planCurrentName: document.querySelector('#planCurrentName'),
+  planVideoUsage: document.querySelector('#planVideoUsage'),
+  planCardUsage: document.querySelector('#planCardUsage'),
   logoHomeBtn: document.querySelector('#logoHomeBtn'),
   cardNavBtn: document.querySelector('#cardNavBtn'),
   katalogNavBtn: document.querySelector('#katalogNavBtn'),
@@ -662,6 +665,14 @@ function showApp() {
   const email = state.auth.profile?.email || state.auth.session?.user?.email || '';
   els.userEmailText.textContent = email;
   refreshLessonHistory().catch(() => {});
+  refreshPlanStatus().catch(() => {});
+}
+
+async function refreshPlanStatus() {
+  const data = await apiGet('/api/plans/me');
+  if (els.planCurrentName) els.planCurrentName.textContent = data.planName || 'Ücretsiz Deneme';
+  if (els.planVideoUsage) els.planVideoUsage.textContent = `${data.video?.used ?? 0}/${data.video?.quota ?? 2}`;
+  if (els.planCardUsage) els.planCardUsage.textContent = `${data.card?.used ?? 0}/${data.card?.quota ?? 2}`;
 }
 
 function setAuthMode(mode) {

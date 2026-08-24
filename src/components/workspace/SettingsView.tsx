@@ -15,6 +15,41 @@ export function SettingsView() {
         </div>
 
         <div className="settingsGroup">
+          <p>Planlar</p>
+          <div className="planCurrent">
+            <strong id="planCurrentName">Ücretsiz Deneme</strong>
+            <div className="planUsageRow">
+              <span>Video</span>
+              <span id="planVideoUsage">0/2</span>
+            </div>
+            <div className="planUsageRow">
+              <span>Kart</span>
+              <span id="planCardUsage">0/2</span>
+            </div>
+          </div>
+          <div className="planCards">
+            <div className="planCard active" id="planCardFree">
+              <strong>Ücretsiz Deneme</strong>
+              <span className="planPrice">$0</span>
+              <small>2 video + 2 kart</small>
+              <span className="planBadge">Aktif</span>
+            </div>
+            <div className="planCard" id="planCard5">
+              <strong>Başlangıç</strong>
+              <span className="planPrice">$5</span>
+              <small>Yakında</small>
+              <span className="planBadge planBadgeSoon">Yakında</span>
+            </div>
+            <div className="planCard" id="planCard10">
+              <strong>Pro</strong>
+              <span className="planPrice">$10</span>
+              <small>Yakında</small>
+              <span className="planBadge planBadgeSoon">Yakında</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="settingsGroup">
           <p>Ders varsayılanları</p>
           <label className="settingsField">
             <span>Varsayılan seviye</span>
