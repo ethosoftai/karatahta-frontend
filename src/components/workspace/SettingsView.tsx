@@ -22,8 +22,23 @@ export function SettingsView() {
           </div>
           <div>
             <strong>Ayarlar</strong>
-            <span>Hesabını, planını ve ders varsayılanlarını buradan yönet</span>
+            <span>Hesabını, planını ve ses tercihlerini buradan yönet</span>
           </div>
+        </div>
+
+        {/* Ders varsayılanları artık ayrı bir kart olarak gösterilmiyor, ama
+            app.js hâlâ bu alanları okuyup/yazıyor (readSettingsFromPanel,
+            renderSettingsPanel, applyLessonDefaultsToForm) -- kaldırmak
+            yerine gizli tutuluyor ki o kablolama kırılmasın. */}
+        <div className="hidden" aria-hidden="true">
+          <select id="settingsDefaultLevel" defaultValue="beginner">
+            <option value="beginner">Başlangıç</option>
+            <option value="intermediate">Orta</option>
+            <option value="advanced">İleri</option>
+          </select>
+          <input id="settingsDefaultMinutes" type="number" min={1} max={20} />
+          <input id="settingsDefaultSegments" type="number" min={1} max={12} />
+          <input id="settingsDefaultPrior" type="text" />
         </div>
 
         <div className="settingsCard">
@@ -82,40 +97,6 @@ export function SettingsView() {
               <small>Yakında</small>
               <span className="planBadge planBadgeSoon">Yakında</span>
             </div>
-          </div>
-        </div>
-
-        <div className="settingsCard">
-          <SettingsCardHeader
-            title="Ders varsayılanları"
-            icon={(
-              <svg viewBox="0 0 24 24">
-                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
-                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z" />
-              </svg>
-            )}
-          />
-          <div className="settingsFieldGrid">
-            <label className="settingsField">
-              <span>Varsayılan seviye</span>
-              <select id="settingsDefaultLevel">
-                <option value="beginner">Başlangıç</option>
-                <option value="intermediate">Orta</option>
-                <option value="advanced">İleri</option>
-              </select>
-            </label>
-            <label className="settingsField">
-              <span>Varsayılan süre (dk)</span>
-              <input id="settingsDefaultMinutes" type="number" min={1} max={20} />
-            </label>
-            <label className="settingsField">
-              <span>Varsayılan segment sayısı</span>
-              <input id="settingsDefaultSegments" type="number" min={1} max={12} />
-            </label>
-            <label className="settingsField">
-              <span>Varsayılan ön bilgi</span>
-              <input id="settingsDefaultPrior" type="text" placeholder="Ör. lise 10. sınıf" />
-            </label>
           </div>
         </div>
 
