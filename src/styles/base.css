@@ -2784,3 +2784,105 @@ p {
     width: 100%;
   }
 }
+
+/* İlk giriş yol göstericisi */
+.welcomeOverlay {
+  position: fixed;
+  z-index: 200;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(5, 6, 8, 0.72);
+  backdrop-filter: blur(10px);
+}
+
+.welcomeCard {
+  width: min(460px, 100%);
+  display: grid;
+  gap: 22px;
+  padding: 32px 30px;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: var(--surface);
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.5);
+}
+
+.welcomeHeader {
+  display: grid;
+  gap: 6px;
+  text-align: center;
+}
+
+.welcomeLogo {
+  width: min(160px, 60%);
+  margin: 0 auto 6px;
+}
+
+.welcomeHeader h2 {
+  font-size: 21px;
+  font-weight: 750;
+}
+
+.welcomeHeader p {
+  color: var(--muted);
+  font-size: 13.5px;
+}
+
+.welcomeSteps {
+  display: grid;
+  gap: 14px;
+}
+
+.welcomeStep {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.welcomeStep strong {
+  display: block;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.welcomeStep span {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.welcomeStepIcon {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
+.welcomeStepIcon svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.welcomeStartBtn {
+  justify-content: center;
+  width: 100%;
+}
+
+@media (max-width: 520px) {
+  .welcomeCard {
+    padding: 26px 20px;
+    border-radius: 16px;
+  }
+}

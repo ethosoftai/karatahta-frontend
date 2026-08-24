@@ -77,7 +77,7 @@ export function StudioView() {
           <span id="renderMeta">Hazırlanıyor</span>
           <span id="planMeta" />
         </div>
-        <details id="developerConsole" className="developerConsole" open>
+        <details id="developerConsole" className="developerConsole hidden" open>
           <summary>
             <span className="developerConsoleTitle"><span className="developerLiveDot" aria-hidden="true" />Geliştirici konsolu</span>
             <span id="developerConsoleStatus" className="developerConsoleStatus">Hazır</span>

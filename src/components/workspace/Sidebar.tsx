@@ -41,7 +41,7 @@ export function Sidebar() {
         </button>
       </nav>
 
-      <details id="developerPortal" className="backendPortal">
+      <details id="developerPortal" className="backendPortal hidden">
         <summary>
           <span>Developer portal</span>
           <strong id="backendActiveBadge">Railway</strong>

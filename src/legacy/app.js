@@ -18,6 +18,21 @@ function apiUrl(path) {
   return backendRouter.resolve(path);
 }
 
+// Backend-mode selector / health checks / log console are internal
+// debugging tools, not something a normal student needs to see. Gated by
+// email allowlist rather than removed outright so the team can still reach
+// them on their own accounts in production. UI-only: the underlying health
+// endpoints aren't access-controlled, so this hides clutter, it isn't a
+// security boundary.
+const ADMIN_EMAILS = String(import.meta.env.VITE_ADMIN_EMAILS || '')
+  .split(',')
+  .map((email) => email.trim().toLowerCase())
+  .filter(Boolean);
+
+function isAdminEmail(email) {
+  return ADMIN_EMAILS.includes(String(email || '').trim().toLowerCase());
+}
+
 function cacheBustUrl(url) {
   if (!url) return url;
   const separator = String(url).includes('?') ? '&' : '?';
@@ -152,6 +167,7 @@ const els = {
   authMessage: document.querySelector('#authMessage'),
   authSpamHint: document.querySelector('#authSpamHint'),
   userEmailText: document.querySelector('#userEmailText'),
+  developerPortal: document.querySelector('#developerPortal'),
   logoutBtn: document.querySelector('#logoutBtn'),
   planCurrentName: document.querySelector('#planCurrentName'),
   planVideoUsage: document.querySelector('#planVideoUsage'),
@@ -224,6 +240,7 @@ const els = {
   karaLiveBtn: document.querySelector('#karaLiveBtn'),
   karaChat: document.querySelector('#karaChat'),
   logOutput: document.querySelector('#logOutput'),
+  developerConsole: document.querySelector('#developerConsole'),
   developerConsoleStatus: document.querySelector('#developerConsoleStatus'),
   developerJobMetric: document.querySelector('#developerJobMetric'),
   developerStateMetric: document.querySelector('#developerStateMetric'),
@@ -664,8 +681,11 @@ function showApp() {
   els.appShell.classList.remove('hidden');
   const email = state.auth.profile?.email || state.auth.session?.user?.email || '';
   els.userEmailText.textContent = email;
+  els.developerPortal.classList.toggle('hidden', !isAdminEmail(email));
+  els.developerConsole.classList.toggle('hidden', !isAdminEmail(email));
   refreshLessonHistory().catch(() => {});
   refreshPlanStatus().catch(() => {});
+  window.dispatchEvent(new CustomEvent('kara:show-welcome'));
 }
 
 async function refreshPlanStatus() {

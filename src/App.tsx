@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { AuthGate } from './components/AuthGate';
+import { WelcomeTour } from './components/WelcomeTour';
 import { Workspace } from './components/Workspace';
 
 function loadMathJax() {
@@ -27,6 +28,7 @@ export function App() {
     <>
       <AuthGate />
       <Workspace />
+      <WelcomeTour />
     </>
   );
 }
