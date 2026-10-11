@@ -96,6 +96,9 @@ export function WelcomeTour() {
             </div>
           ))}
         </div>
+        <div className="welcomeQuota">
+          Ücretsiz denemende <strong>2 video</strong> ve <strong>2 kart</strong> oluşturma hakkın var.
+        </div>
         <button type="button" className="primaryAction welcomeStartBtn" onClick={dismiss}>
           Hadi başlayalım
         </button>
